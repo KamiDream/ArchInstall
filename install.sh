@@ -775,7 +775,7 @@ install_base_system() {
     echo -e "${GREEN}  ✓ ParallelDownloads = 5${RESET}"
     echo ""
 
-    local pkg_base="base base-devel linux-zen linux-zen-headers linux-lts linux-lts-headers linux-firmware dosfstools btrfs-progs"
+    local pkg_base="base base-devel linux-zen linux-zen-headers linux-lts linux-firmware dosfstools btrfs-progs"
     local pkg_extra="networkmanager bluez bluez-utils cups cups-filters ghostscript pipewire pipewire-pulse wireplumber alsa-utils"
     local pkg_boot=""
     if [[ "$bootloader" == "grub" ]]; then
