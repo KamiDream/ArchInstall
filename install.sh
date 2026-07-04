@@ -1261,6 +1261,15 @@ main() {
         echo "  Total : ${disk_gib}G | Boot: ${boot_size} | Swap: ${swap_size} | Root: ${root_gb}G | Home: ${home_gb}G"
         echo ""
 
+        # Minimum root size check (dual-kernel + base-devel needs ~10G)
+        local MIN_ROOT=10
+        if (( $(echo "$root_gb < $MIN_ROOT" | bc -l) )); then
+            echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
+            echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages need at least ${MIN_ROOT}G.${RESET}"
+            echo -e "${YELLOW}     Try: larger disk, smaller swap, or manual sizing.${RESET}"
+            exit 1
+        fi
+
         create_partitions_clean "$disk" "$boot_size" "$swap_size" "${root_gb}G" "${home_gb}G" "$firmware"
 
         if [[ "$firmware" == "uefi" ]]; then
@@ -1331,6 +1340,14 @@ main() {
 
         echo "  Available before /home : ${avail_gib}G | Boot: 3G | Swap: ${swap_size} | Root: ${root_gb}G"
         echo ""
+
+        # Minimum root size check (dual-kernel + base-devel needs ~10G)
+        local MIN_ROOT=10
+        if (( $(echo "$root_gb < $MIN_ROOT" | bc -l) )); then
+            echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
+            echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages need at least ${MIN_ROOT}G.${RESET}"
+            exit 1
+        fi
 
         create_partitions_reinstall "$disk" "$home_num" "$boot_size" "$swap_size" "${root_gb}G" "$firmware"
 
