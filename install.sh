@@ -551,53 +551,26 @@ format_partitions() {
 
     # Phase 1: Format all partitions in parallel
     echo "  Formatting all partitions in parallel ..."
-    local -a format_cmds=()
-    local -a format_names=()
-
-    format_names+=("boot (FAT32)")
-    format_cmds+=("mkfs.fat -F32 -n \"EFI\" \"$boot\"")
-
+    local -a f_args=()
+    f_args+=("boot (FAT32)" "mkfs.fat -F32 -n EFI $boot")
     if [[ -n "$swap" ]]; then
-        format_names+=("swap")
-        format_cmds+=("mkswap -L \"SWAP\" \"$swap\"")
+        f_args+=("swap" "mkswap -L SWAP $swap")
     fi
-
-    format_names+=("root (btrfs)")
-    format_cmds+=("mkfs.btrfs -f -L \"ROOT\" \"$root\"")
-
+    f_args+=("root (btrfs)" "mkfs.btrfs -f -L ROOT $root")
     if [[ "$fmt_home" == "true" ]]; then
-        format_names+=("home (btrfs)")
-        format_cmds+=("mkfs.btrfs -f -L \"HOME\" \"$home\"")
+        f_args+=("home (btrfs)" "mkfs.btrfs -f -L HOME $home")
     fi
-
-    # Build parallel command string
-    local parallel_cmd=""
-    for i in "${!format_names[@]}"; do
-        parallel_cmd+="\"${format_names[$i]}\" \"${format_cmds[$i]}\" "
-    done
-
-    run_parallel $parallel_cmd
+    run_parallel "${f_args[@]}"
 
     # Phase 2: Create btrfs subvolumes (depends on format completion)
     echo ""
     echo "  Creating btrfs subvolumes in parallel ..."
-    local -a subvol_cmds=()
-    local -a subvol_names=()
-
-    subvol_names+=("root @ subvolume")
-    subvol_cmds+=("local mnt_tmp=\$(mktemp -d); mount \"$root\" \"\$mnt_tmp\"; btrfs subvolume create \"\${mnt_tmp}/@\"; umount \"\$mnt_tmp\"; rmdir \"\$mnt_tmp\"")
-
+    local -a s_args=()
+    s_args+=("root @ subvolume" "mnt_tmp=\$(mktemp -d); mount $root \$mnt_tmp; btrfs subvolume create \${mnt_tmp}/@; umount \$mnt_tmp; rmdir \$mnt_tmp")
     if [[ "$fmt_home" == "true" ]]; then
-        subvol_names+=("home @home subvolume")
-        subvol_cmds+=("local mnt_tmp=\$(mktemp -d); mount \"$home\" \"\$mnt_tmp\"; btrfs subvolume create \"\${mnt_tmp}/@home\"; umount \"\$mnt_tmp\"; rmdir \"\$mnt_tmp\"")
+        s_args+=("home @home subvolume" "mnt_tmp=\$(mktemp -d); mount $home \$mnt_tmp; btrfs subvolume create \${mnt_tmp}/@home; umount \$mnt_tmp; rmdir \$mnt_tmp")
     fi
-
-    local subvol_parallel=""
-    for i in "${!subvol_names[@]}"; do
-        subvol_parallel+="\"${subvol_names[$i]}\" \"${subvol_cmds[$i]}\" "
-    done
-
-    run_parallel $subvol_parallel
+    run_parallel "${s_args[@]}"
 
     echo -e "${GREEN}  ✓ All partitions formatted and subvolumes created.${RESET}"
 }
@@ -618,12 +591,19 @@ mount_partitions() {
     echo "========================================================================================================================="
 
     echo "  Mounting root (@) to ${mnt} ..."
-    mount -o subvol=@ "$root" "$mnt"
+    if ! mount -o subvol=@ "$root" "$mnt"; then
+        echo -e "${RED}  ❌ Failed to mount root partition ($root) with subvol=@${RESET}"
+        echo -e "${YELLOW}     Check if @ subvolume exists: btrfs subvolume list $root${RESET}"
+        exit 1
+    fi
 
     mkdir -p "${mnt}/boot" "${mnt}/home"
 
     echo "  Mounting boot to ${mnt}/boot ..."
-    mount "$boot" "${mnt}/boot"
+    if ! mount "$boot" "${mnt}/boot"; then
+        echo -e "${RED}  ❌ Failed to mount boot partition ($boot)${RESET}"
+        exit 1
+    fi
 
     # Check for @home subvolume (reinstall mode compat)
     echo "  Probing home partition for @home subvolume ..."
