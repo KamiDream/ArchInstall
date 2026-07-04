@@ -49,6 +49,7 @@ LOGO
 
 # ─── Progress tracker ───────────────────────
 STEPS=(
+    "Risk Disclaimer"
     "System Info"
     "Disk Selection"
     "Installation Mode"
@@ -75,7 +76,7 @@ show_progress() {
     local current="$1"
     echo ""
     for i in "${!STEPS[@]}"; do
-        local num=$((i + 1))
+        local num=$((i))
         if (( num < current )); then
             echo -e "  ${GREEN}[✓]${RESET} Step ${num}: ${STEPS[$i]}"
         elif (( num == current )); then
@@ -115,6 +116,42 @@ check_prereqs() {
             exit 1
         fi
     done
+}
+
+# ─── Risk Disclaimer (Step 0) ────────────────
+risk_disclaimer() {
+    clear
+    print_logo
+    show_progress 0
+    echo ""
+    echo "========================================================================================================================="
+    echo " Step 0: Risk Disclaimer"
+    echo "========================================================================================================================="
+    echo ""
+    echo -e "${RED}${BOLD}  ⚠️  WARNING: DESTRUCTIVE OPERATIONS AHEAD${RESET}"
+    echo ""
+    echo "  This script will perform IRREVERSIBLE operations on your disk, including:"
+    echo "    • Wiping partition tables"
+    echo "    • Creating new partitions"
+    echo "    • Formatting partitions (destroying all existing data)"
+    echo ""
+    echo "  By proceeding, you acknowledge that:"
+    echo "    • You have BACKED UP all important data"
+    echo "    • You understand the risks involved"
+    echo "    • You accept FULL RESPONSIBILITY for any data loss, hardware damage,"
+    echo "      system corruption, or any other consequences"
+    echo "    • THE AUTHOR(S) BEAR NO LIABILITY WHATSOEVER"
+    echo ""
+    echo -e "${YELLOW}  USE AT YOUR OWN RISK.${RESET}"
+    echo ""
+    read -rp "$(echo -e "${RED}${BOLD}  Type 'I ACCEPT THE RISK' to continue, or anything else to abort: ${RESET}") " acceptance
+    echo ""
+    if [[ "$acceptance" != "I ACCEPT THE RISK" ]]; then
+        echo -e "${GREEN}  ✓ Aborted by user.${RESET}"
+        exit 0
+    fi
+    echo -e "${GREEN}  ✓ Risk acknowledged. Proceeding...${RESET}"
+    echo ""
 }
 
 # ─── Select target disk ──────────────────────
@@ -925,6 +962,9 @@ finalize_install() {
 
 # ─── Main ─────────────────────────────────────
 main() {
+    # 0. Risk Disclaimer
+    risk_disclaimer
+
     # 1. Prerequisites
     check_prereqs
 
