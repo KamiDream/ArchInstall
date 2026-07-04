@@ -8,10 +8,11 @@
 
 ### 安装模式
 
-| 模式 | 说明 |
-|------|------|
-| **Clean Install（全新安装）** | 擦除目标磁盘全部数据，全新创建所有分区并安装系统 |
-| **Reinstall（重装保留 /home）** | 保留现有 `/home` 分区数据，仅重建 boot、swap、root 分区 |
+
+| 模式                            | 说明                                                   |
+| ------------------------------- | ------------------------------------------------------ |
+| **Clean Install（全新安装）**   | 擦除目标磁盘全部数据，全新创建所有分区并安装系统       |
+| **Reinstall（重装保留 /home）** | 保留现有`/home` 分区数据，仅重建 boot、swap、root 分区 |
 
 ### 分区方案
 
@@ -28,19 +29,21 @@
 
 ### 文件系统
 
+
 | 分区 | 文件系统 | 子卷/标签 |
-|------|---------|-----------|
-| Boot | FAT32 | `EFI` |
-| Root | btrfs | `@` |
-| Home | btrfs | `@home` |
-| Swap | swap | `SWAP` |
+| ---- | -------- | --------- |
+| Boot | FAT32    | `EFI`     |
+| Root | btrfs    | `@`       |
+| Home | btrfs    | `@home`   |
+| Swap | swap     | `SWAP`    |
 
 ### 引导加载程序
 
-| 固件类型 | 可选引导程序 |
-|---------|-------------|
-| UEFI | `systemd-boot`（默认，推荐）/ `GRUB` |
-| BIOS | `GRUB`（唯一选项） |
+
+| 固件类型 | 可选引导程序                         |
+| -------- | ------------------------------------ |
+| UEFI     | `systemd-boot`（默认，推荐）/ `GRUB` |
+| BIOS     | `GRUB`（唯一选项）                   |
 
 ### 安装的软件包
 
@@ -81,12 +84,20 @@
 
 ```bash
 # 在 Arch Linux 安装 ISO 环境中，以 root 身份运行：
+方法1:
 curl -L -O  https://cutt.ly/ArchInstall
 chmod +x ArchInstall
 ./ArchInstall
+方法2:
+pacman -Syu git
+git clone https://gitee.com/kamidream/ArchInstall.git
+cd ArchInstall
+chmode +x install.sh
+./install.sh
 ```
 
 按交互提示依次完成：
+
 1. 选择固件类型与引导加载程序
 2. 选择目标磁盘
 3. 选择安装模式
