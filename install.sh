@@ -1261,11 +1261,11 @@ main() {
         echo "  Total : ${disk_gib}G | Boot: ${boot_size} | Swap: ${swap_size} | Root: ${root_gb}G | Home: ${home_gb}G"
         echo ""
 
-        # Minimum root size check (dual-kernel + base-devel needs ~10G)
-        local MIN_ROOT=10
+        # Minimum root size check (dual-kernel + base-devel + cache needs ~12-15G)
+        local MIN_ROOT=15
         if (( $(echo "$root_gb < $MIN_ROOT" | bc -l) )); then
             echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
-            echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages need at least ${MIN_ROOT}G.${RESET}"
+            echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages + pacman cache need at least ${MIN_ROOT}G.${RESET}"
             echo -e "${YELLOW}     Try: larger disk, smaller swap, or manual sizing.${RESET}"
             exit 1
         fi
@@ -1341,8 +1341,8 @@ main() {
         echo "  Available before /home : ${avail_gib}G | Boot: 3G | Swap: ${swap_size} | Root: ${root_gb}G"
         echo ""
 
-        # Minimum root size check (dual-kernel + base-devel needs ~10G)
-        local MIN_ROOT=10
+        # Minimum root size check (dual-kernel + base-devel + cache needs ~12-15G)
+        local MIN_ROOT=15
         if (( $(echo "$root_gb < $MIN_ROOT" | bc -l) )); then
             echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
             echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages need at least ${MIN_ROOT}G.${RESET}"
