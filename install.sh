@@ -62,8 +62,7 @@ STEPS=(
     "Format Partitions"
     "Mount Partitions"
     "fstab Reference"
-    "Install Base System"
-    "Timezone"
+    "Install Base System (+Timezone, Locale)"
     "Hostname"
     "Bootloader"
     "Services"
@@ -217,12 +216,12 @@ risk_disclaimer() {
     echo ""
     echo -e "${YELLOW}  USE AT YOUR OWN RISK.${RESET}"
     echo ""
-    read -rp "$(echo -e "${RED}${BOLD}  Type 'I ACCEPT THE RISK' to continue, or anything else to abort: ${RESET}") " acceptance
+    read -rp "$(echo -e "${RED}${BOLD}  Continue? [y/N]: ${RESET}") " acceptance
     echo ""
-    if [[ "$acceptance" != "I ACCEPT THE RISK" ]]; then
-        echo -e "${GREEN}  ✓ Aborted by user.${RESET}"
-        exit 0
-    fi
+    case "$acceptance" in
+        y|Y) ;;
+        *) echo -e "${GREEN}  ✓ Aborted by user.${RESET}"; exit 0 ;;
+    esac
     echo -e "${GREEN}  ✓ Risk acknowledged. Proceeding...${RESET}"
     echo ""
 }
@@ -858,7 +857,7 @@ configure_hostname() {
 
     clear
     print_logo
-    show_progress 15
+    show_progress 14
     echo ""
     echo "========================================================================================================================="
     echo " Step 15: Hostname"
@@ -885,7 +884,7 @@ install_bootloader_step() {
 
     clear
     print_logo
-    show_progress 16
+    show_progress 15
     echo ""
     echo "========================================================================================================================="
     echo " Step 16: Bootloader"
@@ -932,7 +931,7 @@ enable_services_step() {
 
     clear
     print_logo
-    show_progress 17
+    show_progress 16
     echo ""
     echo "========================================================================================================================="
     echo " Step 17: Services"
@@ -983,7 +982,7 @@ set_root_password_step() {
 
     clear
     print_logo
-    show_progress 18
+    show_progress 17
     echo ""
     echo "========================================================================================================================="
     echo " Step 18: Set Root Password"
@@ -1016,7 +1015,7 @@ create_user_step() {
 
     clear
     print_logo
-    show_progress 19
+    show_progress 18
     echo ""
     echo "========================================================================================================================="
     echo " Step 19: Create User"
