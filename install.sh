@@ -155,13 +155,34 @@ sync_partitions() {
     udevadm settle 2>/dev/null || sleep 2
 }
 
+# ─── Write domestic mirror list (instant, no network) ──
+write_cn_mirrors() {
+    cat > /etc/pacman.d/mirrorlist << 'MIRRORS'
+## China Arch Linux Mirrors (direct write, no network request)
+## pacman will try servers in order; failed ones are skipped automatically
+
+Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.aliyun.com/archlinux/$repo/os/$arch
+Server = https://mirrors.163.com/archlinux/$repo/os/$arch
+Server = https://mirrors.zju.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.sjtug.sjtu.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.nju.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.hit.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.bfsu.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.neusoft.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.cqu.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.xjtu.edu.cn/archlinux/$repo/os/$arch
+MIRRORS
+}
+
 # ─── Prerequisites check ─────────────────────
 check_prereqs() {
     if [[ $EUID -ne 0 ]]; then
         echo -e "${RED}  ❌ This script must be run as root!${RESET}"
         exit 1
     fi
-    local cmds=(lsblk sgdisk mkfs.fat mkfs.btrfs mkswap parted bc btrfs reflector)
+    local cmds=(lsblk sgdisk mkfs.fat mkfs.btrfs mkswap parted bc btrfs)
     for cmd in "${cmds[@]}"; do
         if ! command -v "$cmd" &>/dev/null; then
             echo -e "${RED}  ❌ Missing required command: $cmd${RESET}"
@@ -734,29 +755,15 @@ install_base_system() {
     echo ""
     read -rp "$(echo -e "${CYAN}  Press Enter to start pacstrap (or Ctrl+C to abort)${RESET}") "
 
-    # ── Update mirrors with reflector (China, with timeout) ──
+    # ── Write domestic mirror list (direct write, no network request) ──
     echo ""
-    read -rp "$(echo -e "${YELLOW}  Update pacman mirrors with reflector? [Y/n]: ${RESET}") " ans
+    read -rp "$(echo -e "${YELLOW}  Use domestic mirrors? [Y/n]: ${RESET}") " ans
     case "$ans" in
-        n|N) echo -e "${GREEN}  ✓ Skipped mirror update.${RESET}" ;;
+        n|N) echo -e "${GREEN}  ✓ Skipped mirror setup.${RESET}" ;;
         *)
-            echo ">>> Updating pacman mirrors (multi-country redundancy, no speed test) ..."
-            # Multi-country for redundancy: if one country's mirrors fail, others take over
-            # --sort score: pre-computed mirror scores (no speed test, finishes in ~1-2s)
-            # --latest 50:   keep 50 mirrors as fallback pool (pacman will try them in order)
-            if timeout 20 reflector --verbose \
-                --country China,Japan,Korea,Singapore,Taiwan,Hong_Kong \
-                --sort score --latest 50 \
-                --save /etc/pacman.d/mirrorlist 2>&1; then
-                echo -e "${GREEN}  ✓ Mirrors updated (top 50, 6 countries).${RESET}"
-            else
-                local rc=$?
-                if [[ $rc -eq 124 ]]; then
-                    echo -e "${YELLOW}  ⚠️  Reflector timed out, using existing mirrors.${RESET}"
-                else
-                    echo -e "${YELLOW}  ⚠️  Reflector failed (exit $rc), using existing mirrors.${RESET}"
-                fi
-            fi
+            echo ">>> Writing domestic mirror list (12 mirrors, instant) ..."
+            write_cn_mirrors
+            echo -e "${GREEN}  ✓ 12 domestic mirrors written.${RESET}"
             ;;
     esac
     echo ""
@@ -793,12 +800,10 @@ install_base_system() {
         fi
         retry=$((retry + 1))
         if (( retry < max_retries )); then
-            echo -e "${YELLOW}  ⚠️  pacstrap failed (attempt $retry/${max_retries}), refreshing mirrors & retrying ...${RESET}"
-            # Quick mirror refresh without speed test to pick different mirrors
-            reflector --country China,Japan,Korea,Singapore,Taiwan \
-                --sort score --latest 50 \
-                --save /etc/pacman.d/mirrorlist 2>/dev/null || true
-            sleep 2
+            echo -e "${YELLOW}  ⚠️  pacstrap failed (attempt $retry/${max_retries}), rewriting mirrors & retrying ...${RESET}"
+            # Rewrite mirror list to shuffle mirror order (instant, no network)
+            write_cn_mirrors
+            sleep 1
         fi
     done
     if [[ $pacstrap_ok -eq 0 ]]; then
@@ -831,34 +836,20 @@ FSTAB
     echo "KEYMAP=us" > "${mnt}/etc/vconsole.conf"
     echo -e "${GREEN}  ✓ vconsole.conf created (keymap=us).${RESET}"
 
-    return 0
-}
-
-# ─── Configure timezone ────────────────────────
-configure_timezone() {
-    local mnt="$1"
-
-    clear
-    print_logo
-    show_progress 14
-    echo ""
-    echo "========================================================================================================================="
-    echo " Step 14: Timezone"
-    echo "========================================================================================================================="
-    local tz="Asia/Shanghai"
-    read -rp "$(echo -e "${CYAN}  Enter timezone (default Asia/Shanghai): ${RESET}") " tz_input
-    [[ -n "$tz_input" ]] && tz="$tz_input"
-    arch-chroot "$mnt" ln -sf "/usr/share/zoneinfo/${tz}" /etc/localtime
+    # ── Timezone (no prompt, default Asia/Shanghai) ──
+    echo ">>> Setting timezone to Asia/Shanghai ..."
+    arch-chroot "$mnt" ln -sf "/usr/share/zoneinfo/Asia/Shanghai" /etc/localtime
     arch-chroot "$mnt" hwclock --systohc
-    echo -e "${GREEN}  ✓ Timezone set to ${tz}${RESET}"
+    echo -e "${GREEN}  ✓ Timezone set to Asia/Shanghai${RESET}"
 
-    # ── Locale (en_US.UTF-8, no prompt) ──
-    echo ""
-    echo "  Configuring locale en_US.UTF-8 ..."
+    # ── Locale (en_US.UTF-8) ──
+    echo ">>> Configuring locale en_US.UTF-8 ..."
     sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' "${mnt}/etc/locale.gen"
     arch-chroot "$mnt" locale-gen
     echo "LANG=en_US.UTF-8" > "${mnt}/etc/locale.conf"
     echo -e "${GREEN}  ✓ Locale set to en_US.UTF-8${RESET}"
+
+    return 0
 }
 
 # ─── Configure hostname ────────────────────────
@@ -1389,9 +1380,6 @@ main() {
         echo -e "${YELLOW}  ⚠️  Base system not installed. Exiting.${RESET}"
         exit 0
     fi
-
-    # 14. Timezone (also locale)
-    configure_timezone "/mnt"
 
     # 15. Hostname
     configure_hostname "/mnt"
