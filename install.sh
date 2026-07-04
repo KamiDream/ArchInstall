@@ -103,6 +103,58 @@ parse_gb() {
     echo "$1" | sed 's/G//'
 }
 
+# ─── Parallel execution helper ────────────────
+# Usage: run_parallel "task1" "cmd1" "task2" "cmd2" ...
+# Runs all commands in parallel, waits for all, reports failures
+run_parallel() {
+    local -a pids=()
+    local -a names=()
+    local failed=0
+
+    while [[ $# -gt 0 ]]; do
+        local name="$1"
+        local cmd="$2"
+        shift 2
+
+        names+=("$name")
+        echo "  [→] Starting: ${name} ..."
+        eval "$cmd" &
+        pids+=($!)
+    done
+
+    for i in "${!pids[@]}"; do
+        local pid=${pids[$i]}
+        local name=${names[$i]}
+        if wait "$pid" 2>/dev/null; then
+            echo -e "  ${GREEN}[✓]${RESET} Done: ${name}"
+        else
+            echo -e "  ${RED}[✗]${RESET} Failed: ${name} (exit code $?)"
+            failed=1
+        fi
+    done
+
+    return $failed
+}
+
+# Wait for block device to appear (with timeout)
+wait_for_device() {
+    local dev="$1"
+    local timeout="${2:-10}"
+    local elapsed=0
+    while [[ ! -b "$dev" ]] && (( elapsed < timeout )); do
+        sleep 0.5
+        elapsed=$((elapsed + 1))
+    done
+    [[ -b "$dev" ]]
+}
+
+# Trigger udev and wait for device nodes to settle
+sync_partitions() {
+    local disk="$1"
+    partprobe "$disk" 2>/dev/null || true
+    udevadm settle 2>/dev/null || sleep 2
+}
+
 # ─── Prerequisites check ─────────────────────
 check_prereqs() {
     if [[ $EUID -ne 0 ]]; then
@@ -361,7 +413,7 @@ create_partitions_clean() {
         echo -e "${YELLOW}  ⚠️  Swap skipped (size = 0).${RESET}"
     fi
 
-    sleep 2; partprobe "$disk" 2>/dev/null || true; sleep 1
+    sync_partitions "$disk"
 }
 
 # ─── Reinstall: keep home, recreate rest ─────
@@ -460,10 +512,10 @@ create_partitions_reinstall() {
     sgdisk -t "${home_num}:8300" -c "${home_num}:HOME" "$disk" 2>/dev/null || true
     echo -e "${GREEN}  ✓ /home (partition #${home_num}) preserved.${RESET}"
 
-    sleep 2; partprobe "$disk" 2>/dev/null || true; sleep 1
+    sync_partitions "$disk"
 }
 
-# ─── Format partitions ───────────────────────
+# ─── Format partitions (parallel where possible) ──
 format_partitions() {
     local firmware="$1"
     local boot="$2"
@@ -471,7 +523,6 @@ format_partitions() {
     local root="$4"
     local home="$5"
     local fmt_home="$6"
-    local mnt_tmp
 
     clear
     echo ""
@@ -479,41 +530,57 @@ format_partitions() {
     echo " Step 10: Format Partitions"
     echo "========================================================================================================================="
 
-    echo "  Formatting boot as FAT32 ..."
-    mkfs.fat -F32 -n "EFI" "$boot"
-    echo -e "${GREEN}  ✓ Boot formatted${RESET}"
+    # Phase 1: Format all partitions in parallel
+    echo "  Formatting all partitions in parallel ..."
+    local -a format_cmds=()
+    local -a format_names=()
+
+    format_names+=("boot (FAT32)")
+    format_cmds+=("mkfs.fat -F32 -n \"EFI\" \"$boot\"")
 
     if [[ -n "$swap" ]]; then
-        echo "  Formatting swap ..."
-        mkswap -L "SWAP" "$swap"
-        echo -e "${GREEN}  ✓ Swap formatted${RESET}"
-    else
-        echo -e "${YELLOW}  ⚠️  Swap skipped (no swap partition).${RESET}"
+        format_names+=("swap")
+        format_cmds+=("mkswap -L \"SWAP\" \"$swap\"")
     fi
 
-    # Root btrfs + @ subvolume
-    echo "  Formatting root as btrfs ..."
-    mkfs.btrfs -f -L "ROOT" "$root"
-    mnt_tmp=$(mktemp -d)
-    mount "$root" "$mnt_tmp"
-    btrfs subvolume create "${mnt_tmp}/@"
-    umount "$mnt_tmp"
-    rmdir "$mnt_tmp"
-    echo -e "${GREEN}  ✓ Root formatted, subvolume @ created${RESET}"
+    format_names+=("root (btrfs)")
+    format_cmds+=("mkfs.btrfs -f -L \"ROOT\" \"$root\"")
 
-    # Home btrfs + @home subvolume
     if [[ "$fmt_home" == "true" ]]; then
-        echo "  Formatting home as btrfs ..."
-        mkfs.btrfs -f -L "HOME" "$home"
-        mnt_tmp=$(mktemp -d)
-        mount "$home" "$mnt_tmp"
-        btrfs subvolume create "${mnt_tmp}/@home"
-        umount "$mnt_tmp"
-        rmdir "$mnt_tmp"
-        echo -e "${GREEN}  ✓ Home formatted, subvolume @home created${RESET}"
-    else
-        echo -e "${GREEN}  ✓ Home skipped (preserving existing data)${RESET}"
+        format_names+=("home (btrfs)")
+        format_cmds+=("mkfs.btrfs -f -L \"HOME\" \"$home\"")
     fi
+
+    # Build parallel command string
+    local parallel_cmd=""
+    for i in "${!format_names[@]}"; do
+        parallel_cmd+="\"${format_names[$i]}\" \"${format_cmds[$i]}\" "
+    done
+
+    run_parallel $parallel_cmd
+
+    # Phase 2: Create btrfs subvolumes (depends on format completion)
+    echo ""
+    echo "  Creating btrfs subvolumes in parallel ..."
+    local -a subvol_cmds=()
+    local -a subvol_names=()
+
+    subvol_names+=("root @ subvolume")
+    subvol_cmds+=("local mnt_tmp=\$(mktemp -d); mount \"$root\" \"\$mnt_tmp\"; btrfs subvolume create \"\${mnt_tmp}/@\"; umount \"\$mnt_tmp\"; rmdir \"\$mnt_tmp\"")
+
+    if [[ "$fmt_home" == "true" ]]; then
+        subvol_names+=("home @home subvolume")
+        subvol_cmds+=("local mnt_tmp=\$(mktemp -d); mount \"$home\" \"\$mnt_tmp\"; btrfs subvolume create \"\${mnt_tmp}/@home\"; umount \"\$mnt_tmp\"; rmdir \"\$mnt_tmp\"")
+    fi
+
+    local subvol_parallel=""
+    for i in "${!subvol_names[@]}"; do
+        subvol_parallel+="\"${subvol_names[$i]}\" \"${subvol_cmds[$i]}\" "
+    done
+
+    run_parallel $subvol_parallel
+
+    echo -e "${GREEN}  ✓ All partitions formatted and subvolumes created.${RESET}"
 }
 
 # ─── Mount partitions ────────────────────────
@@ -667,17 +734,37 @@ install_base_system() {
     echo ""
     read -rp "$(echo -e "${CYAN}  Press Enter to start pacstrap (or Ctrl+C to abort)${RESET}") "
 
-    # ── Update mirrors with reflector (China) ──
+    # ── Update mirrors with reflector (China, with timeout) ──
     echo ""
     read -rp "$(echo -e "${YELLOW}  Update pacman mirrors with reflector? [Y/n]: ${RESET}") " ans
     case "$ans" in
         n|N) echo -e "${GREEN}  ✓ Skipped mirror update.${RESET}" ;;
         *)
-            echo ">>> Updating pacman mirrors (reflector --country China) ..."
-            reflector --verbose --country China --sort rate --save /etc/pacman.d/mirrorlist
-            echo -e "${GREEN}  ✓ Mirrors updated.${RESET}"
+            echo ">>> Updating pacman mirrors (reflector --country China, no speed test) ..."
+            # --sort score: pre-computed mirror scores (no speed test, finishes in ~1-2s)
+            # --latest 20:   limit to 20 most recently synced mirrors
+            if timeout 15 reflector --verbose --country China --sort score --latest 20 --save /etc/pacman.d/mirrorlist 2>&1; then
+                echo -e "${GREEN}  ✓ Mirrors updated (top 20 by score).${RESET}"
+            else
+                local rc=$?
+                if [[ $rc -eq 124 ]]; then
+                    echo -e "${YELLOW}  ⚠️  Reflector timed out, using existing mirrors.${RESET}"
+                else
+                    echo -e "${YELLOW}  ⚠️  Reflector failed (exit $rc), using existing mirrors.${RESET}"
+                fi
+            fi
             ;;
     esac
+    echo ""
+
+    # ── Enable parallel downloads in pacman.conf (faster pacstrap) ──
+    echo ">>> Enabling parallel downloads (5) in /etc/pacman.conf ..."
+    if grep -q '^ParallelDownloads' /etc/pacman.conf 2>/dev/null; then
+        sed -i 's/^ParallelDownloads.*/ParallelDownloads = 5/' /etc/pacman.conf
+    else
+        sed -i '/^\[options\]/a ParallelDownloads = 5' /etc/pacman.conf
+    fi
+    echo -e "${GREEN}  ✓ ParallelDownloads = 5${RESET}"
     echo ""
 
     local pkg_base="base base-devel linux-zen linux-zen-headers linux-lts linux-lts-headers linux-firmware dosfstools btrfs-progs"
@@ -855,10 +942,10 @@ enable_services_step() {
     echo "  Configuring mkinitcpio for btrfs ..."
     arch-chroot "$mnt" sed -i 's/^MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
     arch-chroot "$mnt" sed -i 's/^#MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
-    echo "  Regenerating initramfs for linux-zen ..."
-    arch-chroot "$mnt" mkinitcpio -p linux-zen
-    echo "  Regenerating initramfs for linux-lts ..."
-    arch-chroot "$mnt" mkinitcpio -p linux-lts
+    echo "  Regenerating initramfs for linux-zen and linux-lts in parallel ..."
+    run_parallel \
+        "linux-zen initramfs"  "arch-chroot \"$mnt\" mkinitcpio -p linux-zen" \
+        "linux-lts initramfs"  "arch-chroot \"$mnt\" mkinitcpio -p linux-lts"
     echo -e "${GREEN}  ✓ Initramfs regenerated.${RESET}"
 
     # ── Verify boot files ──
