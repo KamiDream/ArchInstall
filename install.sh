@@ -18,6 +18,20 @@ cleanup() {
     exit 1
 }
 trap 'cleanup' INT
+
+# Prompt user to retry instead of exiting on failure
+retry_or_exit() {
+    local msg="${1:-Operation failed}"
+    echo -e "${RED}  ❌ ${msg}${RESET}" >&2
+    local ans
+    while true; do
+        read -rp "$(echo -e "${YELLOW}  Retry? [Y/n] (default Y): ${RESET}") " ans
+        case "${ans:-y}" in
+            y|Y) return 0 ;;
+            n|N) echo -e "${GREEN}  ✓ Exiting by user request.${RESET}"; exit 1 ;;
+        esac
+    done
+}
 # ─────────────────────────────────────────────
 
 # ─── Color definitions ───────────────────────
@@ -453,8 +467,8 @@ create_partitions_reinstall() {
     local home_start
     home_start=$(sgdisk -i "${home_num}" "$disk" 2>/dev/null | grep "^First sector:" | sed 's/^First sector: *\([0-9]*\).*/\1/')
     if [[ -z "$home_start" ]]; then
-        echo -e "${RED}  ❌ Could not determine start sector of home partition #${home_num}.${RESET}"
-        exit 1
+        retry_or_exit "Could not determine start sector of home partition #${home_num}"
+        continue
     fi
 
     local avail_bytes=$((home_start * 512))
@@ -470,8 +484,8 @@ create_partitions_reinstall() {
     needed=$(echo "scale=2; 3 + $swap_gb + $root_gb" | bc -l)
 
     if (( $(echo "$avail_gib < $needed" | bc -l) )); then
-        echo -e "${RED}  ❌ Not enough space! Need ${needed}G, only ${avail_gib}G available.${RESET}"
-        exit 1
+        retry_or_exit "Not enough space! Need ${needed}G, only ${avail_gib}G available"
+        continue
     fi
 
     for ((p = 1; p < home_num; p++)); do
@@ -591,19 +605,24 @@ mount_partitions() {
     echo "========================================================================================================================="
 
     echo "  Mounting root (@) to ${mnt} ..."
-    if ! mount -o subvol=@ "$root" "$mnt"; then
-        echo -e "${RED}  ❌ Failed to mount root partition ($root) with subvol=@${RESET}"
-        echo -e "${YELLOW}     Check if @ subvolume exists: btrfs subvolume list $root${RESET}"
-        exit 1
-    fi
+    while ! mount -o subvol=@ "$root" "$mnt"; do
+        echo -e "${YELLOW}     @ subvolume missing? Trying to create it ...${RESET}"
+        local mnt_tmp
+        mnt_tmp=$(mktemp -d)
+        mount "$root" "$mnt_tmp" 2>/dev/null && {
+            btrfs subvolume create "${mnt_tmp}/@" 2>/dev/null || true
+            umount "$mnt_tmp"
+        }
+        rmdir "$mnt_tmp" 2>/dev/null
+        retry_or_exit "Failed to mount root partition ($root) with subvol=@"
+    done
 
     mkdir -p "${mnt}/boot" "${mnt}/home"
 
     echo "  Mounting boot to ${mnt}/boot ..."
-    if ! mount "$boot" "${mnt}/boot"; then
-        echo -e "${RED}  ❌ Failed to mount boot partition ($boot)${RESET}"
-        exit 1
-    fi
+    while ! mount "$boot" "${mnt}/boot"; do
+        retry_or_exit "Failed to mount boot partition ($boot)"
+    done
 
     # Check for @home subvolume (reinstall mode compat)
     echo "  Probing home partition for @home subvolume ..."
@@ -1188,8 +1207,8 @@ main() {
         fi
 
         if [[ "${split_choice:-1}" != "3" ]] && (( $(echo "$remain <= 1" | bc -l) )); then
-            echo -e "${RED}  ❌ Insufficient disk space! Total: ${disk_gib}G${RESET}"
-            exit 1
+            retry_or_exit "Insufficient disk space! Total: ${disk_gib}G"
+            continue
         fi
         case "${split_choice:-1}" in
             3)
@@ -1218,8 +1237,8 @@ main() {
                 local remain_manual
                 remain_manual=$(echo "scale=2; $disk_gib - $used" | bc -l)
                 if (( $(echo "$remain_manual <= 1" | bc -l) )); then
-                    echo -e "${RED}  ❌ Insufficient space for root+home. Remaining: ${remain_manual}G${RESET}"
-                    exit 1
+                    retry_or_exit "Insufficient space for root+home. Remaining: ${remain_manual}G"
+                    continue
                 fi
                 while true; do
                     read -rp "$(echo -e "${CYAN}  Enter root size in GiB (available: ${remain_manual}G): ${RESET}") " root_gb
@@ -1231,8 +1250,8 @@ main() {
                 done
                 home_gb=$(echo "scale=2; $remain_manual - $root_gb" | bc -l)
                 if (( $(echo "$home_gb <= 0" | bc -l) )); then
-                    echo -e "${RED}  ❌ No space left for home.${RESET}"
-                    exit 1
+                    retry_or_exit "No space left for home"
+                    continue
                 fi
                 boot_size="${boot_gb_final}G"
                 swap_size="${swap_gb}G"
@@ -1265,7 +1284,8 @@ main() {
             echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
             echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages + pacman cache need at least ${MIN_ROOT}G.${RESET}"
             echo -e "${YELLOW}     Try: larger disk, smaller swap, or manual sizing.${RESET}"
-            exit 1
+            retry_or_exit "Root partition too small: ${root_gb}G < ${MIN_ROOT}G"
+            continue
         fi
 
         create_partitions_clean "$disk" "$boot_size" "$swap_size" "${root_gb}G" "${home_gb}G" "$firmware"
@@ -1308,8 +1328,8 @@ main() {
         max_root=$(echo "scale=2; $avail_gib - 3 - $swap_gb" | bc -l)
 
         if (( $(echo "$max_root <= 1" | bc -l) )); then
-            echo -e "${RED}  ❌ Not enough space before /home. Available: ${avail_gib}G${RESET}"
-            exit 1
+            retry_or_exit "Not enough space before /home. Available: ${avail_gib}G"
+            continue
         fi
 
         local root_gb
@@ -1344,7 +1364,8 @@ main() {
         if (( $(echo "$root_gb < $MIN_ROOT" | bc -l) )); then
             echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
             echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages need at least ${MIN_ROOT}G.${RESET}"
-            exit 1
+            retry_or_exit "Root partition too small: ${root_gb}G < ${MIN_ROOT}G"
+            continue
         fi
 
         create_partitions_reinstall "$disk" "$home_num" "$boot_size" "$swap_size" "${root_gb}G" "$firmware"
@@ -1400,10 +1421,9 @@ main() {
     fstab_hint "/mnt" "$ROOT_PART" "$HOME_PART" "$BOOT_PART" "$SWAP_PART"
 
     # 13. Install base system (pacstrap + fstab + vconsole)
-    if ! install_base_system "/mnt" "$firmware" "$disk" "$ROOT_PART" "$BOOT_PART" "$SWAP_PART" "$HOME_PART" "$bootloader"; then
-        echo -e "${YELLOW}  ⚠️  Base system not installed. Exiting.${RESET}"
-        exit 0
-    fi
+    while ! install_base_system "/mnt" "$firmware" "$disk" "$ROOT_PART" "$BOOT_PART" "$SWAP_PART" "$HOME_PART" "$bootloader"; do
+        retry_or_exit "Base system installation failed"
+    done
 
     # 15. Hostname
     configure_hostname "/mnt"
