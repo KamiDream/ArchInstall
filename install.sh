@@ -740,11 +740,15 @@ install_base_system() {
     case "$ans" in
         n|N) echo -e "${GREEN}  ✓ Skipped mirror update.${RESET}" ;;
         *)
-            echo ">>> Updating pacman mirrors (reflector --country China, no speed test) ..."
+            echo ">>> Updating pacman mirrors (multi-country redundancy, no speed test) ..."
+            # Multi-country for redundancy: if one country's mirrors fail, others take over
             # --sort score: pre-computed mirror scores (no speed test, finishes in ~1-2s)
-            # --latest 20:   limit to 20 most recently synced mirrors
-            if timeout 15 reflector --verbose --country China --sort score --latest 20 --save /etc/pacman.d/mirrorlist 2>&1; then
-                echo -e "${GREEN}  ✓ Mirrors updated (top 20 by score).${RESET}"
+            # --latest 50:   keep 50 mirrors as fallback pool (pacman will try them in order)
+            if timeout 20 reflector --verbose \
+                --country China,Japan,Korea,Singapore,Taiwan,Hong_Kong \
+                --sort score --latest 50 \
+                --save /etc/pacman.d/mirrorlist 2>&1; then
+                echo -e "${GREEN}  ✓ Mirrors updated (top 50, 6 countries).${RESET}"
             else
                 local rc=$?
                 if [[ $rc -eq 124 ]]; then
@@ -777,8 +781,31 @@ install_base_system() {
         pkg_boot="efibootmgr"
     fi
 
-    echo ">>> pacstrap -K ${mnt} ${pkg_base} ${pkg_extra} ${pkg_boot} ..."
-    pacstrap -K "$mnt" $pkg_base $pkg_extra $pkg_boot
+    # ── Pacstrap with retry (mirror failures are common) ──
+    local retry=0
+    local max_retries=3
+    local pacstrap_ok=0
+    while (( retry < max_retries )); do
+        echo ">>> pacstrap -K ${mnt} (attempt $((retry+1))/${max_retries}) ..."
+        if pacstrap -K "$mnt" $pkg_base $pkg_extra $pkg_boot; then
+            pacstrap_ok=1
+            break
+        fi
+        retry=$((retry + 1))
+        if (( retry < max_retries )); then
+            echo -e "${YELLOW}  ⚠️  pacstrap failed (attempt $retry/${max_retries}), refreshing mirrors & retrying ...${RESET}"
+            # Quick mirror refresh without speed test to pick different mirrors
+            reflector --country China,Japan,Korea,Singapore,Taiwan \
+                --sort score --latest 50 \
+                --save /etc/pacman.d/mirrorlist 2>/dev/null || true
+            sleep 2
+        fi
+    done
+    if [[ $pacstrap_ok -eq 0 ]]; then
+        echo -e "${RED}  ❌ pacstrap failed after ${max_retries} attempts.${RESET}"
+        echo -e "${YELLOW}  You can retry manually: pacstrap -K ${mnt} ${pkg_base} ${pkg_extra} ${pkg_boot}${RESET}"
+        return 1
+    fi
     echo -e "${GREEN}  ✓ Base system installed.${RESET}"
 
     # ── Generate fstab ──
