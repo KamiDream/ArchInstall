@@ -90,7 +90,7 @@ chmod +x ArchInstall
 ./ArchInstall
 方法2:
 pacman -Syu git
-git clone https://gitee.com/kamidream/ArchInstall.git
+git clone https://github.com/kamidream/ArchInstall.git
 cd ArchInstall
 chmode +x install.sh
 ./install.sh
