@@ -4,7 +4,7 @@
 #   - Detect & ensure GPT partition table
 #   - Two modes: clean install | reinstall (keep /home)
 #   - Boot partition: 3G (FAT32)
-#   - Swap partition: user-configurable, default 4G (at end of disk)
+#   - Swap partition: user-configurable, default 1G (at end of disk)
 #   - Root + Home: remaining space split at 2:7 ratio (btrfs subvolumes)
 #   - Format, mount, root password, user creation
 
@@ -332,16 +332,16 @@ ensure_gpt() {
 # ─── Get swap size ───────────────────────────
 get_swap_size() {
     local size
-    read -rp "$(echo -e "${CYAN}  Enter swap size (e.g., 4G, 2G; default 4G): ${RESET}") " size
+    read -rp "$(echo -e "${CYAN}  Enter swap size (e.g., 1G, 2G; default 1G): ${RESET}") " size
     if [[ -z "$size" ]]; then
-        echo "4G"
+        echo "1G"
     else
         size="${size^^}"
         if [[ "$size" =~ ^[0-9]+G$ ]]; then
             echo "$size"
         else
-            echo -e "${YELLOW}  ⚠️  Invalid format, using default 4G.${RESET}" >&2
-            echo "4G"
+            echo -e "${YELLOW}  ⚠️  Invalid format, using default 1G.${RESET}" >&2
+            echo "1G"
         fi
     fi
 }
@@ -797,9 +797,9 @@ install_base_system() {
 
     local root_free_kb
     root_free_kb=$(df --output=avail "${mnt}" 2>/dev/null | tail -1)
-    if [[ -n "$root_free_kb" ]] && (( root_free_kb < 8000000 )); then
-        echo -e "${RED}  ❌ Root partition has less than 8GB free (${root_free_kb} KB).${RESET}"
-        echo -e "${RED}     pacstrap with dual kernels needs at least 8-10GB.${RESET}"
+    if [[ -n "$root_free_kb" ]] && (( root_free_kb < 10000000 )); then
+        echo -e "${RED}  ❌ Root partition has less than 10GB free (${root_free_kb} KB).${RESET}"
+        echo -e "${RED}     pacstrap with dual kernels needs at least 10GB.${RESET}"
         echo -e "${YELLOW}     Check partition sizes with: lsblk ${root_part}${RESET}"
         return 1
     fi
@@ -1225,8 +1225,8 @@ main() {
                     fi
                 done
                 while true; do
-                    read -rp "$(echo -e "${CYAN}  Enter swap size in GiB (default 4, 0 to skip): ${RESET}") " swap_gb
-                    swap_gb="${swap_gb:-4}"
+                    read -rp "$(echo -e "${CYAN}  Enter swap size in GiB (default 1, 0 to skip): ${RESET}") " swap_gb
+                    swap_gb="${swap_gb:-1}"
                     if [[ "$swap_gb" =~ ^[0-9]+(\.[0-9]+)?$ ]] && (( $(echo "$swap_gb >= 0" | bc -l) )); then
                         break
                     else
@@ -1279,8 +1279,8 @@ main() {
         echo "  Total : ${disk_gib}G | Boot: ${boot_size} | Swap: ${swap_size} | Root: ${root_gb}G | Home: ${home_gb}G"
         echo ""
 
-        # Minimum root size check (dual-kernel + base-devel + cache needs ~12-15G)
-        local MIN_ROOT=15
+        # Minimum root size check (dual-kernel + base-devel needs ~10G)
+        local MIN_ROOT=10
         if (( $(echo "$root_gb < $MIN_ROOT" | bc -l) )); then
             echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
             echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages + pacman cache need at least ${MIN_ROOT}G.${RESET}"
@@ -1359,8 +1359,8 @@ main() {
         echo "  Available before /home : ${avail_gib}G | Boot: 3G | Swap: ${swap_size} | Root: ${root_gb}G"
         echo ""
 
-        # Minimum root size check (dual-kernel + base-devel + cache needs ~12-15G)
-        local MIN_ROOT=15
+        # Minimum root size check (dual-kernel + base-devel needs ~10G)
+        local MIN_ROOT=10
         if (( $(echo "$root_gb < $MIN_ROOT" | bc -l) )); then
             echo -e "${RED}  ❌ Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum${RESET}"
             echo -e "${RED}     Dual kernel (zen+lts) + base-devel + packages need at least ${MIN_ROOT}G.${RESET}"
