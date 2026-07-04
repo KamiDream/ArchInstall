@@ -77,8 +77,8 @@
 
 | 镜像 | 机构 |
 |------|------|
-| mirrors.ustc.edu.cn | 中科大 |
 | mirrors.tuna.tsinghua.edu.cn | 清华 TUNA |
+| mirrors.ustc.edu.cn | 中科大 |
 | mirrors.aliyun.com | 阿里云 |
 | mirrors.163.com | 网易 |
 | mirrors.zju.edu.cn | 浙江大学 |
@@ -90,7 +90,7 @@
 | mirrors.cqu.edu.cn | 重庆大学 |
 | mirrors.xjtu.edu.cn | 西安交大 |
 
-pacstrap 失败时自动重试最多 3 次，每次重试重新写入镜像列表。
+pacstrap 失败时自动重试最多 3 次（每次重试重新写入静态镜像列表）；3 次全部失败后自动调用 reflector 搜索更多国内镜像并再次尝试。
 
 ### 安全设计
 

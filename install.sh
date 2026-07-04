@@ -159,8 +159,8 @@ write_cn_mirrors() {
 ## China Arch Linux Mirrors (direct write, no network request)
 ## pacman will try servers in order; failed ones are skipped automatically
 
-Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch
 Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch
+Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch
 Server = https://mirrors.aliyun.com/archlinux/$repo/os/$arch
 Server = https://mirrors.163.com/archlinux/$repo/os/$arch
 Server = https://mirrors.zju.edu.cn/archlinux/$repo/os/$arch
@@ -804,8 +804,25 @@ install_base_system() {
             sleep 1
         fi
     done
+
+    # Fallback: after 3 static-mirror failures, try reflector
+    if [[ $pacstrap_ok -eq 0 ]] && command -v reflector &>/dev/null; then
+        echo ""
+        echo -e "${YELLOW}  ⚠️  Static mirrors exhausted, trying reflector to find more mirrors ...${RESET}"
+        if timeout 30 reflector --verbose --country China --sort score --latest 30 --save /etc/pacman.d/mirrorlist 2>&1; then
+            echo -e "${GREEN}  ✓ Reflector found additional mirrors, retrying pacstrap ...${RESET}"
+            if pacstrap -K "$mnt" $pkg_base $pkg_extra $pkg_boot; then
+                pacstrap_ok=1
+            fi
+        else
+            echo -e "${YELLOW}  ⚠️  Reflector failed or timed out.${RESET}"
+        fi
+    elif [[ $pacstrap_ok -eq 0 ]]; then
+        echo -e "${YELLOW}  ⚠️  reflector not available, cannot try additional mirrors.${RESET}"
+    fi
+
     if [[ $pacstrap_ok -eq 0 ]]; then
-        echo -e "${RED}  ❌ pacstrap failed after ${max_retries} attempts.${RESET}"
+        echo -e "${RED}  ❌ pacstrap failed after all attempts.${RESET}"
         echo -e "${YELLOW}  You can retry manually: pacstrap -K ${mnt} ${pkg_base} ${pkg_extra} ${pkg_boot}${RESET}"
         return 1
     fi
