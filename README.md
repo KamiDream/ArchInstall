@@ -8,7 +8,6 @@
 
 ### 安装模式
 
-
 | 模式                            | 说明                                                   |
 | ------------------------------- | ------------------------------------------------------ |
 | **Clean Install（全新安装）**   | 擦除目标磁盘全部数据，全新创建所有分区并安装系统       |
@@ -29,7 +28,6 @@
 
 ### 文件系统
 
-
 | 分区 | 文件系统 | 子卷/标签 |
 | ---- | -------- | --------- |
 | Boot | FAT32    | `EFI`     |
@@ -38,7 +36,6 @@
 | Swap | swap     | `SWAP`    |
 
 ### 引导加载程序
-
 
 | 固件类型 | 可选引导程序                         |
 | -------- | ------------------------------------ |
@@ -56,29 +53,57 @@
 
 ### 安装后配置
 
-- 时区设置（默认 `Asia/Shanghai`）
-- Locale 配置（`en_US.UTF-8`）
-- 主机名设置
-- fstab 自动生成（含 UUID）
-- 引导加载程序安装与配置（Zen 内核默认，LTS 备用）
-- 系统服务启用：NetworkManager、Bluetooth、CUPS、PipeWire
-- initramfs 重建（含 btrfs 模块）
-- sudo 权限启用（wheel 组）
-- root 密码设置
-- 普通用户创建（wheel 组）
+- **时区**：自动设为 `Asia/Shanghai`（无交互，在基础系统安装步骤内完成）
+- **Locale**：自动配置 `en_US.UTF-8`（无交互，在基础系统安装步骤内完成）
+- **主机名**：默认 `archlinux`（可自定义）
+- **fstab**：自动生成（含 UUID，btrfs 子卷挂载）
+- **引导加载程序**：systemd-boot（Zen 内核默认，LTS 备用）或 GRUB
+- **系统服务**：NetworkManager、Bluetooth、CUPS、PipeWire
+- **initramfs**：zen 和 lts 内核并行重建（含 btrfs 模块）
+- **sudo**：wheel 组启用
+- **root 密码**与**普通用户**创建
+
+### 性能优化
+
+- **分区格式化并行化**：boot、swap、root、home 四个分区同时格式化
+- **initramfs 并行生成**：linux-zen 和 linux-lts 的 mkinitcpio 同时执行
+- **pacman 并行下载**：自动启用 `ParallelDownloads = 5`
+- **partprobe 优化**：使用 `udevadm settle` 替代固定 sleep 等待
+- **镜像源冗余**：直接写入 12 个国内高可用镜像，无网络请求延迟
+
+### 镜像源
+
+不使用 reflector（无需网络测速），直接写入以下国内镜像到 `/etc/pacman.d/mirrorlist`：
+
+| 镜像 | 机构 |
+|------|------|
+| mirrors.ustc.edu.cn | 中科大 |
+| mirrors.tuna.tsinghua.edu.cn | 清华 TUNA |
+| mirrors.aliyun.com | 阿里云 |
+| mirrors.163.com | 网易 |
+| mirrors.zju.edu.cn | 浙江大学 |
+| mirrors.sjtug.sjtu.edu.cn | 上海交大 |
+| mirrors.nju.edu.cn | 南京大学 |
+| mirrors.hit.edu.cn | 哈工大 |
+| mirrors.bfsu.edu.cn | 北外 |
+| mirrors.neusoft.edu.cn | 东软 |
+| mirrors.cqu.edu.cn | 重庆大学 |
+| mirrors.xjtu.edu.cn | 西安交大 |
+
+pacstrap 失败时自动重试最多 3 次，每次重试重新写入镜像列表。
 
 ### 安全设计
 
 - 必须以 root 权限运行
 - 执行前检查所有必需命令是否可用
-- 破坏性操作默认 `[y/N]` —— 回车即取消
+- **所有破坏性操作默认 `[y/N]`** —— 回车即取消
 - 用户中断（Ctrl+C）时执行清理
 
 ## 依赖
 
 运行此脚本前，请确保以下命令在 Arch Linux 安装环境中可用：
 
-`lsblk`, `sgdisk`, `mkfs.fat`, `mkfs.btrfs`, `mkswap`, `parted`, `bc`, `btrfs`, `reflector`
+`lsblk`, `sgdisk`, `mkfs.fat`, `mkfs.btrfs`, `mkswap`, `parted`, `bc`, `btrfs`
 
 ## 使用方法
 
@@ -92,18 +117,18 @@ chmod +x ArchInstall
 pacman -Syu git
 git clone https://github.com/kamidream/ArchInstall.git
 cd ArchInstall
-chmode +x install.sh
+chmod +x install.sh
 ./install.sh
 ```
 
 按交互提示依次完成：
 
-1. 选择固件类型与引导加载程序
-2. 选择目标磁盘
+1. 风险确认（`[y/N]`）
+2. 选择目标磁盘 → 选择固件类型与引导加载程序
 3. 选择安装模式
 4. 确认分区布局
-5. 安装基础系统
-6. 配置系统（时区、主机名、引导程序、服务、用户等）
+5. 安装基础系统（含时区、locale 自动配置）
+6. 配置系统（主机名、引导程序、服务、用户密码等）
 
 ---
 

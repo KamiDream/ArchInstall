@@ -50,8 +50,7 @@ LOGO
 # ─── Progress tracker ───────────────────────
 STEPS=(
     "Risk Disclaimer"
-    "System Info"
-    "Disk Selection"
+    "Disk Selection (+ Firmware, Bootloader)"
     "Installation Mode"
     "Find Existing /home"
     "Confirmation"
@@ -733,7 +732,7 @@ install_base_system() {
 
     clear
     print_logo
-    show_progress 13
+    show_progress 12
     echo ""
     echo "========================================================================================================================="
     echo " Step 13: Install Base System"
@@ -857,7 +856,7 @@ configure_hostname() {
 
     clear
     print_logo
-    show_progress 14
+    show_progress 13
     echo ""
     echo "========================================================================================================================="
     echo " Step 15: Hostname"
@@ -884,7 +883,7 @@ install_bootloader_step() {
 
     clear
     print_logo
-    show_progress 15
+    show_progress 14
     echo ""
     echo "========================================================================================================================="
     echo " Step 16: Bootloader"
@@ -931,7 +930,7 @@ enable_services_step() {
 
     clear
     print_logo
-    show_progress 16
+    show_progress 15
     echo ""
     echo "========================================================================================================================="
     echo " Step 17: Services"
@@ -982,7 +981,7 @@ set_root_password_step() {
 
     clear
     print_logo
-    show_progress 17
+    show_progress 16
     echo ""
     echo "========================================================================================================================="
     echo " Step 18: Set Root Password"
@@ -1015,7 +1014,7 @@ create_user_step() {
 
     clear
     print_logo
-    show_progress 18
+    show_progress 17
     echo ""
     echo "========================================================================================================================="
     echo " Step 19: Create User"
@@ -1072,27 +1071,12 @@ main() {
     # 1. Prerequisites
     check_prereqs
 
-    # 1. System info (firmware + bootloader)
+    # 1. Disk Selection (+ firmware + bootloader)
     clear
     print_logo
     show_progress 1
     echo "========================================================================================================================="
-    echo " Step 1: System Info"
-    echo "========================================================================================================================="
-    local firmware
-    firmware=$(detect_firmware)
-    echo ""
-    local bootloader
-    bootloader=$(choose_bootloader "$firmware")
-    echo ""
-    echo -e "${GREEN}  ✓ Firmware  : ${firmware^^}${RESET}"
-    echo -e "${GREEN}  ✓ Bootloader: ${bootloader}${RESET}"
-    echo ""
-
-    # 3. Disk selection
-    echo ""
-    echo "========================================================================================================================="
-    echo " Step 2: Disk Selection"
+    echo " Step 1: Disk Selection"
     echo "========================================================================================================================="
     echo ""
     echo "  Available disks:"
@@ -1103,10 +1087,19 @@ main() {
     disk=$(select_disk)
     echo ""
 
-    # 3. Installation mode
+    # Firmware & bootloader (merged into Step 1)
+    local firmware
+    firmware=$(detect_firmware)
+    local bootloader
+    bootloader=$(choose_bootloader "$firmware")
+    echo -e "${GREEN}  ✓ Firmware  : ${firmware^^}${RESET}"
+    echo -e "${GREEN}  ✓ Bootloader: ${bootloader}${RESET}"
+    echo ""
+
+    # 2. Installation mode
     clear
     print_logo
-    show_progress 3
+    show_progress 2
     echo "========================================================================================================================="
     echo " Step 3: Installation Mode"
     echo "========================================================================================================================="
@@ -1126,7 +1119,7 @@ main() {
     # 7. Confirmation
     clear
     print_logo
-    show_progress 5
+    show_progress 4
     echo "========================================================================================================================="
     echo " Step 5: Confirmation"
     echo "========================================================================================================================="
@@ -1141,7 +1134,7 @@ main() {
     # 7. Partitioning
     clear
     print_logo
-    show_progress 7
+    show_progress 6
     echo "========================================================================================================================="
     echo " Step 7: Partitioning"
     echo "========================================================================================================================="
@@ -1346,7 +1339,7 @@ main() {
     # 12. Confirm format [Y/n] (default yes)
     clear
     print_logo
-    show_progress 9
+    show_progress 8
     echo "========================================================================================================================="
     echo " Step 9: Confirm Format"
     echo "========================================================================================================================="
