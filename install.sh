@@ -786,6 +786,24 @@ install_base_system() {
         pkg_boot="efibootmgr"
     fi
 
+    # ── Pre-flight disk space check ──
+    echo ""
+    echo ">>> Checking available disk space before pacstrap ..."
+    echo "  ${mnt} (root @ subvolume):"
+    df -h "${mnt}" | tail -1
+    echo "  ${mnt}/boot (ESP):"
+    df -h "${mnt}/boot" 2>/dev/null | tail -1 || echo "  (not mounted)"
+    echo ""
+
+    local root_free_kb
+    root_free_kb=$(df --output=avail "${mnt}" 2>/dev/null | tail -1)
+    if [[ -n "$root_free_kb" ]] && (( root_free_kb < 8000000 )); then
+        echo -e "${RED}  ❌ Root partition has less than 8GB free (${root_free_kb} KB).${RESET}"
+        echo -e "${RED}     pacstrap with dual kernels needs at least 8-10GB.${RESET}"
+        echo -e "${YELLOW}     Check partition sizes with: lsblk ${root_part}${RESET}"
+        return 1
+    fi
+
     # ── Pacstrap with retry (mirror failures are common) ──
     local retry=0
     local max_retries=3
