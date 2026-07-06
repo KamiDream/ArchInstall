@@ -99,17 +99,84 @@ STEPS=(
 )
 TOTAL=${#STEPS[@]}
 
+# 0 = pending, 1 = completed (index matches step number)
+COMPLETED=()
+
+# Interactive step selector — ↑/↓ to navigate, Enter to execute, q to quit
+# Sets global STEP_SELECTED to the chosen step number
+interactive_progress() {
+    local selected=0
+    local key seq
+
+    # Default: select first uncompleted step
+    for i in "${!STEPS[@]}"; do
+        if [[ ${COMPLETED[$i]:-0} -eq 0 ]]; then
+            selected=$i
+            break
+        fi
+    done
+
+    echo -ne "\e[?25l"
+
+    while true; do
+        echo ""
+        for i in "${!STEPS[@]}"; do
+            local mark=" "
+            if [[ ${COMPLETED[$i]:-0} -eq 1 ]]; then
+                mark="${GREEN}✓${RESET}"
+            fi
+
+            if [[ $i -eq $selected ]]; then
+                echo -e "  ${CYAN}▶${RESET} ${mark} Step ${i}: ${STEPS[$i]}"
+            else
+                echo -e "    ${mark} Step ${i}: ${STEPS[$i]}"
+            fi
+        done
+        echo ""
+        echo -e "  ${YELLOW}↑/↓ 导航 • Enter 执行 • q 退出${RESET}"
+
+        read -rsn1 key
+        if [[ "$key" == $'\e' ]]; then
+            read -rsn2 -t 0.1 seq 2>/dev/null || true
+            case "$seq" in
+                '[A')  # Up
+                    ((selected--))
+                    [[ $selected -lt 0 ]] && selected=$((${#STEPS[@]} - 1))
+                    ;;
+                '[B')  # Down
+                    ((selected++))
+                    [[ $selected -ge ${#STEPS[@]} ]] && selected=0
+                    ;;
+            esac
+            local total_lines=$((${#STEPS[@]} + 4))
+            for ((j=0; j<total_lines; j++)); do
+                echo -ne "\e[1A\e[2K"
+            done
+        elif [[ "$key" == "q" || "$key" == "Q" ]]; then
+            echo -ne "\e[?25h"
+            echo ""
+            echo -e "${GREEN}  ✓ Exited by user.${RESET}"
+            exit 0
+        elif [[ "$key" == "" || "$key" == $'\n' || "$key" == $'\r' ]]; then
+            STEP_SELECTED=$selected
+            echo -ne "\e[?25h"
+            echo ""
+            return 0
+        fi
+    done
+}
+
+# Static progress display (kept for inline context within steps)
 show_progress() {
     local current="$1"
     echo ""
     for i in "${!STEPS[@]}"; do
-        local num=$((i))
-        if (( num < current )); then
-            echo -e "  ${GREEN}[✓]${RESET} Step ${num}: ${STEPS[$i]}"
-        elif (( num == current )); then
-            echo -e "  ${CYAN}[→]${RESET} Step ${num}: ${STEPS[$i]}"
+        if [[ ${COMPLETED[$i]:-0} -eq 1 ]]; then
+            echo -e "  ${GREEN}[✓]${RESET} Step ${i}: ${STEPS[$i]}"
+        elif (( i == current )); then
+            echo -e "  ${CYAN}[→]${RESET} Step ${i}: ${STEPS[$i]}"
         else
-            echo -e "  [ ] Step ${num}: ${STEPS[$i]}"
+            echo -e "  [ ] Step ${i}: ${STEPS[$i]}"
         fi
     done
     echo ""
@@ -297,8 +364,12 @@ main() {
     local pkg_base pkg_extra pkg_boot
     local root_partuuid disk_dev
     local MIN_ROOT=10
+    STEP_SELECTED=0
+    COMPLETED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
 
     while true; do
+        interactive_progress
+        step=$STEP_SELECTED
         case $step in
             # ─────────────────────────────────────
             0) # Risk Disclaimer + Prerequisites
@@ -345,7 +416,7 @@ main() {
                     fi
                 done
 
-                step=1
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -397,7 +468,7 @@ main() {
                 success "Bootloader: ${bootloader}"
                 echo ""
 
-                step=2
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -419,11 +490,7 @@ main() {
                 esac
                 success "Mode: ${mode} install"
 
-                if [[ "$mode" == "reinstall" ]]; then
-                    step=3
-                else
-                    step=4
-                fi
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -457,7 +524,7 @@ main() {
                 success "Home partition number: ${home_num}"
                 echo ""
 
-                step=4
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -480,7 +547,7 @@ main() {
                     *) success "Cancelled by user."; exit 0 ;;
                 esac
 
-                step=5
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -503,7 +570,7 @@ main() {
                 fi
                 echo ""
 
-                step=6
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -835,7 +902,7 @@ main() {
                 echo ""
 
                 # ── Proceed directly to format + mount (no confirm needed) ──
-                step=7
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -937,7 +1004,7 @@ main() {
                 echo "  Run: genfstab -U ${mnt} > ${mnt}/etc/fstab"
                 echo ""
 
-                step=8
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -995,7 +1062,7 @@ main() {
                     error "Root partition has less than 10GB free (${root_free_kb} KB)."
                     error "pacstrap with dual kernels needs at least 10GB."
                     warning "Check partition sizes with: lsblk ${ROOT_PART}"
-                    step=9; continue
+                    continue
                 fi
 
                 # Pacstrap with retry
@@ -1035,7 +1102,7 @@ main() {
                 if [[ $pacstrap_ok -eq 0 ]]; then
                     error "pacstrap failed after all attempts."
                     warning "You can retry manually: pacstrap -K ${mnt} ${pkg_base} ${pkg_extra} ${pkg_boot}"
-                    step=9; continue
+                    continue
                 fi
                 success "Base system installed."
 
@@ -1088,7 +1155,7 @@ FSTAB
                 echo "LANG=en_US.UTF-8" > "${mnt}/etc/locale.conf"
                 success "Locale set to en_US.UTF-8"
 
-                step=9
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1109,7 +1176,7 @@ FSTAB
 EOF
                 success "Hostname set to ${hostname}"
 
-                step=10
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1152,7 +1219,7 @@ EOF
                     success "GRUB installed."
                 fi
 
-                step=11
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1198,7 +1265,7 @@ EOF
                 arch-chroot "$mnt" sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
                 success "sudo enabled for wheel group."
 
-                step=12
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1210,7 +1277,7 @@ EOF
                 section "Step 12: Set Root Password"
                 read -rp "$(echo -e "${YELLOW}  Set root password now? [Y/n]: ${RESET}") " ans
                 case "$ans" in
-                    n|N) success "Skipped."; step=13; continue ;;
+                    n|N) success "Skipped."; COMPLETED[$step]=1; continue ;;
                     *) ;;
                 esac
 
@@ -1228,7 +1295,7 @@ EOF
                     fi
                 done
 
-                step=13
+                COMPLETED[$step]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1277,7 +1344,7 @@ EOF
                         ;;
                     *) success "You can reboot later with: reboot" ;;
                 esac
-                break   # exit while loop
+                COMPLETED[$step]=1; break   # exit while loop
                 ;;
         esac
     done
