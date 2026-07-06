@@ -120,6 +120,10 @@ interactive_progress() {
         clear
         print_logo
         echo ""
+        echo "========================================================================================================================="
+        echo "                     ArchInstall — Interactive Steps"
+        echo "========================================================================================================================="
+        echo ""
         for i in "${!STEPS[@]}"; do
             local mark=" "
             if [[ ${COMPLETED[$i]:-0} -eq 1 ]]; then
@@ -133,7 +137,9 @@ interactive_progress() {
             fi
         done
         echo ""
+        echo "========================================================================================================================="
         echo -e "  ${YELLOW}↑/↓ Navigate • Enter Execute • q Quit${RESET}"
+        echo ""
 
         read -rsn1 key
         if [[ "$key" == $'\e' ]]; then
