@@ -206,7 +206,10 @@ select_menu() {
 
     while true; do
         # Print prompt and options
+        echo ""
+        echo "========================================================================================================================="
         echo -e "  ${prompt}"
+        echo "========================================================================================================================="
         echo ""
         for i in "${!options[@]}"; do
             if [[ $i -eq $selected ]]; then
@@ -234,7 +237,7 @@ select_menu() {
                     ;;
             esac
             # Move cursor up to re-render options
-            local total_lines=$((opt_count + 4))
+            local total_lines=$((opt_count + 7))
             for ((j=0; j<total_lines; j++)); do
                 echo -ne "\e[1A\e[2K"
             done
@@ -388,7 +391,6 @@ main() {
                 clear
                 print_logo
                 show_progress 0
-                section "Step 0: Risk Disclaimer"
                 echo -e "${RED}${BOLD}  ⚠️  WARNING: DESTRUCTIVE OPERATIONS AHEAD${RESET}"
                 echo ""
                 echo "  This script will perform IRREVERSIBLE operations on your disk, including:"
@@ -435,7 +437,6 @@ main() {
                 clear
                 print_logo
                 show_progress 1
-                section "Step 1: Disk Selection"
 
                 # Collect disk options
                 local -a disk_options=()
@@ -487,7 +488,6 @@ main() {
                 clear
                 print_logo
                 show_progress 2
-                section "Step 2: Installation Mode"
 
                 # Choose mode (↑/↓ selection)
                 select_menu "Select installation mode:" \
@@ -511,7 +511,6 @@ main() {
             3) # Find Existing /home (reinstall only)
             # ─────────────────────────────────────
                 clear
-                section "Step 3: Find Existing /home" >&2
 
                 # Find home partition by label or manual input (inline)
                 local home_dev
@@ -547,7 +546,6 @@ main() {
                 clear
                 print_logo
                 show_progress 2
-                section "Step 4: Confirmation"
                 warning "Target disk: $disk"
                 if [[ "$mode" == "clean" ]]; then
                     warning "ALL DATA on this disk will be DESTROYED!"
@@ -569,7 +567,6 @@ main() {
                 clear
                 print_logo
                 show_progress 2
-                section "Step 5: GPT Check"
 
                 local label
                 label=$(blkid -s PTTYPE -o value "$disk" 2>/dev/null || true)
@@ -592,7 +589,6 @@ main() {
                 clear
                 print_logo
                 show_progress 2
-                section "Step 6: Partitioning + Layout + Confirm"
 
                 boot_size="3G"
                 BOOT_PART=""; SWAP_PART=""; ROOT_PART=""; HOME_PART=""
@@ -924,7 +920,6 @@ main() {
                 clear
                 print_logo
                 show_progress 2
-                section "Step 7: Format + Mount + fstab"
 
                 # ── Format all partitions in parallel ──
                 echo "  Formatting all partitions in parallel ..."
@@ -1026,7 +1021,6 @@ main() {
                 clear
                 print_logo
                 show_progress 3
-                section "Step 8: Install Base System"
 
                 echo "  Installing base system (pacstrap)..."
                 echo "  Packages: base base-devel linux-zen linux-lts linux-firmware"
@@ -1143,7 +1137,6 @@ FSTAB
                 clear
                 print_logo
                 show_progress 2
-                section "Step 9: Hostname"
                 local hostname="archlinux"
                 read -rp "$(echo -e "${CYAN}  Enter hostname (default archlinux): ${RESET}") " hostname_input
                 [[ -n "$hostname_input" ]] && hostname="$hostname_input"
@@ -1164,7 +1157,6 @@ EOF
                 clear
                 print_logo
                 show_progress 2
-                section "Step 10: Bootloader"
                 info "Installing bootloader (${bootloader}) ..."
 
                 root_partuuid=$(blkid -s PARTUUID -o value "$ROOT_PART" 2>/dev/null)
@@ -1207,7 +1199,6 @@ EOF
                 clear
                 print_logo
                 show_progress 2
-                section "Step 11: Services"
 
                 echo "  Enabling NetworkManager ..."
                 arch-chroot "$mnt" systemctl enable NetworkManager
@@ -1253,7 +1244,6 @@ EOF
                 clear
                 print_logo
                 show_progress 2
-                section "Step 12: Set Root Password"
                 select_menu "Set root password now?" "Yes" "No (skip)"
                 if (( SELECT_MENU_RESULT == 1 )); then
                     success "Skipped."; COMPLETED[7]=1; continue
@@ -1282,7 +1272,6 @@ EOF
                 clear
                 print_logo
                 show_progress 3
-                section "Step 13: Create User"
                 select_menu "Create a new user?" "Yes" "No (skip)"
                 if (( SELECT_MENU_RESULT == 1 )); then
                     success "Skipped user creation."
