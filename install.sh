@@ -355,7 +355,10 @@ get_swap_size() {
 main() {
     # ── Shared state ──
     local step=0
-    local ans choice acceptance msg
+    local auto_step=-1
+    STEP_SELECTED=0
+    COMPLETED=(0 0 0 0 0 0 0 0 0)
+    local ans choice msg
     local disk="" firmware="" bootloader="" mode="" home_num=""
     local boot_size="3G" BOOT_PART="" SWAP_PART="" ROOT_PART="" HOME_PART="" FORMAT_HOME="true"
     local swap_size="" swap_gb=0 root_gb=0 home_gb=0 boot_gb_final=0
@@ -370,11 +373,6 @@ main() {
     local pkg_base pkg_extra pkg_boot
     local root_partuuid disk_dev
     local MIN_ROOT=10
-    local auto_step=-1
-    STEP_SELECTED=0
-    COMPLETED=(0 0 0 0 0 0 0 0 0)
-    # Map menu step index → internal case number
-    local -a MENU_TO_CASE=(0 1 2 8 9 10 11 12 13)
 
     while true; do
         if (( auto_step >= 0 )); then
@@ -382,13 +380,13 @@ main() {
             auto_step=-1
         else
             interactive_progress
-            step=${MENU_TO_CASE[$STEP_SELECTED]}
+            step=$STEP_SELECTED
         fi
         case $step in
             # ─────────────────────────────────────
             0) # Risk Disclaimer + Prerequisites
-                show_progress 0
             # ─────────────────────────────────────
+                show_progress 0
                 clear
                 print_logo
                 echo -e "${RED}${BOLD}  ⚠️  WARNING: DESTRUCTIVE OPERATIONS AHEAD${RESET}"
@@ -433,8 +431,8 @@ main() {
 
             # ─────────────────────────────────────
             1) # Disk Selection + Firmware + Bootloader
-                show_progress 1
             # ─────────────────────────────────────
+                show_progress 1
                 clear
                 print_logo
 
@@ -484,8 +482,8 @@ main() {
 
             # ─────────────────────────────────────
             2) # Installation Mode
-                show_progress 2
             # ─────────────────────────────────────
+                show_progress 2
                 clear
                 print_logo
 
@@ -505,11 +503,9 @@ main() {
                 else
                     auto_step=4
                 fi
-                ;;
 
-            # ─────────────────────────────────────
-            3) # Find Existing /home (reinstall only)
-            # ─────────────────────────────────────
+            # --- Find Existing /home (reinstall only) ---
+                if [[ "$mode" == "reinstall" ]]; then
                 clear
 
                 # Find home partition by label or manual input (inline)
@@ -537,13 +533,10 @@ main() {
                 success "Home partition number: ${home_num}"
                 echo ""
 
-                auto_step=4
-                ;;
+                # (continues)
 
-            # ─────────────────────────────────────
-            4) # Confirmation
-                show_progress 2
-            # ─────────────────────────────────────
+                fi
+            # --- Confirmation ---
                 clear
                 print_logo
                 warning "Target disk: $disk"
@@ -558,13 +551,9 @@ main() {
                     success "Cancelled by user."; exit 0
                 fi
 
-                auto_step=5
-                ;;
+                # (continues)
 
-            # ─────────────────────────────────────
-            5) # GPT Check
-                show_progress 2
-            # ─────────────────────────────────────
+            # --- GPT Check ---
                 clear
                 print_logo
 
@@ -580,13 +569,9 @@ main() {
                 fi
                 echo ""
 
-                auto_step=6
-                ;;
+                # (continues)
 
-            # ─────────────────────────────────────
-            6) # Partitioning + Layout + Confirm
-                show_progress 2
-            # ─────────────────────────────────────
+            # --- Partitioning + Layout ---
                 clear
                 print_logo
 
@@ -911,13 +896,9 @@ main() {
                 echo ""
 
                 # ── Proceed directly to format + mount (no confirm needed) ──
-                auto_step=7
-                ;;
+                # (continues)
 
-            # ─────────────────────────────────────
-            7) # Format + Mount + fstab
-                show_progress 2
-            # ─────────────────────────────────────
+            # --- Format + Mount + fstab ---
                 clear
                 print_logo
 
@@ -1016,9 +997,9 @@ main() {
                 ;;
 
             # ─────────────────────────────────────
-            8) # Install Base System (pacstrap)
-                show_progress 3
+            3) # Install Base System
             # ─────────────────────────────────────
+                show_progress 3
                 clear
                 print_logo
 
@@ -1132,9 +1113,9 @@ FSTAB
                 ;;
 
             # ─────────────────────────────────────
-            9) # Configure Hostname
-                show_progress 4
+            4) # Configure Hostname
             # ─────────────────────────────────────
+                show_progress 4
                 clear
                 print_logo
                 local hostname="archlinux"
@@ -1152,9 +1133,9 @@ EOF
                 ;;
 
             # ─────────────────────────────────────
-            10) # Install Bootloader
-                show_progress 5
+            5) # Install Bootloader
             # ─────────────────────────────────────
+                show_progress 5
                 clear
                 print_logo
                 info "Installing bootloader (${bootloader}) ..."
@@ -1194,9 +1175,9 @@ EOF
                 ;;
 
             # ─────────────────────────────────────
-            11) # Enable Services
-                show_progress 6
+            6) # Enable Services
             # ─────────────────────────────────────
+                show_progress 6
                 clear
                 print_logo
 
@@ -1239,9 +1220,9 @@ EOF
                 ;;
 
             # ─────────────────────────────────────
-            12) # Set Root Password
-                show_progress 7
+            7) # Set Root Password
             # ─────────────────────────────────────
+                show_progress 7
                 clear
                 print_logo
                 select_menu "Set root password now?" "Yes" "No (skip)"
@@ -1267,9 +1248,9 @@ EOF
                 ;;
 
             # ─────────────────────────────────────
-            13) # Create User + Finalize
-                show_progress 8
+            8) # Create User + Finalize
             # ─────────────────────────────────────
+                show_progress 8
                 clear
                 print_logo
                 select_menu "Create a new user?" "Yes" "No (skip)"
