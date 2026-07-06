@@ -769,19 +769,7 @@ main() {
                 printf "  %-12s %-11s %-11s %-10s %s\n" "$SWAP_PART" "$swap_size_str" "swap" "—" "[SWAP]"
                 echo ""
 
-                # ── Confirm Format (inline, no separate step) ──
-                msg="Format and mount these partitions?"
-                [[ "$FORMAT_HOME" == "false" ]] && msg="Format boot+swap+root and mount all (home preserved)?"
-                read -rp "$(echo -e "${YELLOW}  ${msg} [Y/n]: ${RESET}") " ans
-                case "$ans" in
-                    n|N)
-                        success "Skipped formatting. Partitions created but not formatted."
-                        exit 0
-                        ;;
-                    *) ;;
-                esac
-                echo ""
-
+                # ── Proceed directly to format + mount (no confirm needed) ──
                 step=7
                 ;;
 
@@ -894,32 +882,18 @@ main() {
                 print_logo
                 show_progress 8
                 section "Step 8: Install Base System"
-                read -rp "$(echo -e "${YELLOW}  Install base system now? (pacstrap) [Y/n]: ${RESET}") " ans
-                case "$ans" in
-                    n|N) success "Skipped system installation."; step=9; continue ;;
-                    *) ;;
-                esac
 
-                echo ""
                 echo "  Installing base system (pacstrap)..."
                 echo "  Packages: base base-devel linux-zen linux-lts linux-firmware"
                 echo "           + dosfstools btrfs-progs"
                 echo "           + networkmanager bluez bluez-utils cups pipewire"
                 echo "           + ${bootloader} bootloader packages"
                 echo ""
-                read -rp "$(echo -e "${CYAN}  Press Enter to start pacstrap (or Ctrl+C to abort)${RESET}") "
 
-                # Write domestic mirrors
-                echo ""
-                read -rp "$(echo -e "${YELLOW}  Use domestic mirrors? [Y/n]: ${RESET}") " ans
-                case "$ans" in
-                    n|N) success "Skipped mirror setup." ;;
-                    *)
-                        echo ">>> Writing domestic mirror list (12 mirrors, instant) ..."
-                        write_cn_mirrors
-                        success "12 domestic mirrors written."
-                        ;;
-                esac
+                # Write domestic mirrors (auto, no prompt)
+                echo ">>> Writing domestic mirror list (12 mirrors, instant) ..."
+                write_cn_mirrors
+                success "12 domestic mirrors written."
                 echo ""
 
                 # Enable parallel downloads in live env
