@@ -387,6 +387,7 @@ main() {
         case $step in
             # ─────────────────────────────────────
             0) # Risk Disclaimer + Prerequisites
+                show_progress 0
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -432,6 +433,7 @@ main() {
 
             # ─────────────────────────────────────
             1) # Disk Selection + Firmware + Bootloader
+                show_progress 1
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -482,6 +484,7 @@ main() {
 
             # ─────────────────────────────────────
             2) # Installation Mode
+                show_progress 2
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -539,6 +542,7 @@ main() {
 
             # ─────────────────────────────────────
             4) # Confirmation
+                show_progress 2
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -559,6 +563,7 @@ main() {
 
             # ─────────────────────────────────────
             5) # GPT Check
+                show_progress 2
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -580,6 +585,7 @@ main() {
 
             # ─────────────────────────────────────
             6) # Partitioning + Layout + Confirm
+                show_progress 2
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -910,6 +916,7 @@ main() {
 
             # ─────────────────────────────────────
             7) # Format + Mount + fstab
+                show_progress 2
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -1010,6 +1017,7 @@ main() {
 
             # ─────────────────────────────────────
             8) # Install Base System (pacstrap)
+                show_progress 3
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -1125,6 +1133,7 @@ FSTAB
 
             # ─────────────────────────────────────
             9) # Configure Hostname
+                show_progress 4
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -1144,6 +1153,7 @@ EOF
 
             # ─────────────────────────────────────
             10) # Install Bootloader
+                show_progress 5
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -1185,6 +1195,7 @@ EOF
 
             # ─────────────────────────────────────
             11) # Enable Services
+                show_progress 6
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -1229,6 +1240,7 @@ EOF
 
             # ─────────────────────────────────────
             12) # Set Root Password
+                show_progress 7
             # ─────────────────────────────────────
                 clear
                 print_logo
@@ -1256,6 +1268,7 @@ EOF
 
             # ─────────────────────────────────────
             13) # Create User + Finalize
+                show_progress 8
             # ─────────────────────────────────────
                 clear
                 print_logo
