@@ -886,7 +886,7 @@ main() {
                 echo "  Installing base system (pacstrap)..."
                 echo "  Packages: base base-devel linux-zen linux-lts linux-firmware"
                 echo "           + dosfstools btrfs-progs"
-                echo "           + networkmanager bluez bluez-utils cups pipewire"
+                echo "           + networkmanager bluez bluez-utils cups cups-pk-helper pipewire"
                 echo "           + ${bootloader} bootloader packages"
                 echo ""
 
@@ -907,7 +907,7 @@ main() {
                 echo ""
 
                 pkg_base="base base-devel linux-zen linux-zen-headers linux-lts linux-firmware dosfstools btrfs-progs"
-                pkg_extra="networkmanager bluez bluez-utils cups cups-filters ghostscript pipewire pipewire-pulse wireplumber alsa-utils"
+                pkg_extra="networkmanager bluez bluez-utils cups cups-filters cups-pk-helper ghostscript pipewire pipewire-pulse wireplumber alsa-utils"
                 pkg_boot=""
                 if [[ "$bootloader" == "grub" ]]; then
                     pkg_boot="grub"

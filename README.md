@@ -47,7 +47,7 @@
 - **基础系统**: `base`, `base-devel`, `linux-zen`, `linux-zen-headers`, `linux-lts`, `linux-firmware`
 - **文件系统工具**: `dosfstools`, `btrfs-progs`
 - **网络与蓝牙**: `networkmanager`, `bluez`, `bluez-utils`
-- **打印**: `cups`, `cups-filters`, `ghostscript`
+- **打印**: `cups`, `cups-filters`, `cups-pk-helper`, `ghostscript`
 - **音频**: `pipewire`, `pipewire-pulse`, `wireplumber`, `alsa-utils`
 - **引导程序**: `systemd-boot` 对应 `efibootmgr`；`GRUB` 对应 `grub`（+ `efibootmgr` for UEFI）
 
