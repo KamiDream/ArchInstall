@@ -355,19 +355,22 @@ main() {
                 print_logo
                 show_progress 1
                 section "Step 1: Disk Selection"
-                echo "  Available disks:"
-                lsblk -d -o NAME,SIZE,TYPE,MODEL | grep -E 'disk'
-                echo ""
 
-                # Select disk (inline)
-                while true; do
-                    read -rp "$(echo -e "${CYAN}  Enter target disk (e.g., /dev/sda, /dev/nvme0n1): ${RESET}") " disk
-                    if [[ -b "$disk" ]]; then
-                        break
-                    else
-                        error "Device $disk does not exist or is not a block device."
-                    fi
-                done
+                # Collect disk options
+                local -a disk_options=()
+                while IFS= read -r line; do
+                    [[ -z "$line" ]] && continue
+                    disk_options+=("$line")
+                done < <(lsblk -d -n -o NAME,SIZE,MODEL 2>/dev/null)
+
+                if [[ ${#disk_options[@]} -eq 0 ]]; then
+                    error "No disks found!"
+                    exit 1
+                fi
+
+                select_menu "Select target disk:" "${disk_options[@]}"
+                local selected_line="${disk_options[$SELECT_MENU_RESULT]}"
+                disk="/dev/$(echo "$selected_line" | awk '{print $1}')"
                 echo ""
 
                 # Detect firmware (inline one-liner)
