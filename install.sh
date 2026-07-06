@@ -371,6 +371,8 @@ main() {
     local auto_step=-1
     STEP_SELECTED=0
     COMPLETED=(0 0 0 0 0 0 0 0 0)
+    # Map menu step index → internal case number
+    local -a MENU_TO_CASE=(0 1 2 8 9 10 11 12 13)
 
     while true; do
         if (( auto_step >= 0 )); then
@@ -378,7 +380,7 @@ main() {
             auto_step=-1
         else
             interactive_progress
-            step=$STEP_SELECTED
+            step=${MENU_TO_CASE[$STEP_SELECTED]}
         fi
         case $step in
             # ─────────────────────────────────────
