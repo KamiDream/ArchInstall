@@ -52,8 +52,6 @@ success()  { echo -e "${GREEN}  ✓ ${*}${RESET}"; }
 error()    { echo -e "${RED}  ❌ ${*}${RESET}" >&2; }
 warning()  { echo -e "${YELLOW}  ⚠️  ${*}${RESET}" >&2; }
 info()     { echo -e "${CYAN}  → ${*}${RESET}"; }
-section()  { echo ""; echo "========================================================================================================================="; echo " ${*}"; echo "========================================================================================================================="; echo ""; }
-
 # Float comparison helpers
 float_gt()  { (( $(echo "$1 > $2"  | bc -l) )); }
 float_lt()  { (( $(echo "$1 < $2"  | bc -l) )); }
@@ -269,9 +267,7 @@ get_part_dev() {
 }
 
 # Strip 'G' suffix from size string
-parse_gb() {
-    echo "$1" | sed 's/G//'
-}
+parse_gb() { echo "${1%G}"; }
 
 # Parallel execution helper
 # Usage: run_parallel "task1" "cmd1" "task2" "cmd2" ...
@@ -309,6 +305,16 @@ sync_partitions() {
     local disk="$1"
     partprobe "$disk" 2>/dev/null || true
     udevadm settle 2>/dev/null || sleep 2
+}
+
+# Enable parallel downloads in pacman.conf (target optional: empty=live env, path=chroot)
+enable_parallel_downloads() {
+    local conf="${1:-/etc/pacman.conf}"
+    if grep -q '^ParallelDownloads' "$conf" 2>/dev/null; then
+        sed -i 's/^ParallelDownloads.*/ParallelDownloads = 5/' "$conf"
+    else
+        sed -i '/^\[options\]/a ParallelDownloads = 5' "$conf"
+    fi
 }
 
 # Write domestic mirror list (instant, no network)
@@ -358,7 +364,7 @@ main() {
     local auto_step=-1
     STEP_SELECTED=0
     COMPLETED=(0 0 0 0 0 0 0 0 0)
-    local ans choice msg
+    local choice
     local disk="" firmware="" bootloader="" mode="" home_num=""
     local boot_size="3G" BOOT_PART="" SWAP_PART="" ROOT_PART="" HOME_PART="" FORMAT_HOME="true"
     local swap_size="" swap_gb=0 root_gb=0 home_gb=0 boot_gb_final=0
@@ -369,7 +375,7 @@ main() {
     local mnt_tmp mnt="/mnt"
     local root_uuid home_uuid boot_uuid swap_uuid
     local rp1 rp2 up1 up2 username hostname_input
-    local root_free_kb retry max_retries pacstrap_ok
+    local root_free_kb
     local pkg_base pkg_extra pkg_boot
     local root_partuuid disk_dev
     local MIN_ROOT=10
@@ -498,11 +504,7 @@ main() {
                 esac
                 success "Mode: ${mode} install"
 
-                if [[ "$mode" == "reinstall" ]]; then
-                    auto_step=3
-                else
-                    auto_step=4
-                fi
+                auto_step=3
 
             # --- Find Existing /home (reinstall only) ---
                 if [[ "$mode" == "reinstall" ]]; then
@@ -533,8 +535,6 @@ main() {
                 success "Home partition number: ${home_num}"
                 echo ""
 
-                # (continues)
-
                 fi
             # --- Confirmation ---
                 clear
@@ -551,8 +551,6 @@ main() {
                     success "Cancelled by user."; exit 0
                 fi
 
-                # (continues)
-
             # --- GPT Check ---
                 clear
                 print_logo
@@ -568,8 +566,6 @@ main() {
                     success "GPT partition table created."
                 fi
                 echo ""
-
-                # (continues)
 
             # --- Partitioning + Layout ---
                 clear
@@ -971,28 +967,6 @@ main() {
                 success "All partitions mounted."
                 echo ""
 
-                # ── fstab reference (informational) ──
-                echo "========================================================================================================================="
-                echo " fstab Reference"
-                echo "========================================================================================================================="
-                echo ""
-                echo "  After genfstab, these entries will be in ${mnt}/etc/fstab:"
-                echo ""
-
-                root_uuid=$(blkid -s UUID -o value "$ROOT_PART" 2>/dev/null || echo "<UUID>")
-                home_uuid=$(blkid -s UUID -o value "$HOME_PART" 2>/dev/null || echo "<UUID>")
-                boot_uuid=$(blkid -s UUID -o value "$BOOT_PART" 2>/dev/null || echo "<UUID>")
-                swap_uuid=$(blkid -s UUID -o value "$SWAP_PART" 2>/dev/null || echo "<UUID>")
-
-                echo "  # <file system>    <mount point>   <type>  <options>              <dump> <pass>"
-                echo "  UUID=${root_uuid}  /               btrfs   rw,subvol=@            0      0"
-                echo "  UUID=${home_uuid}  /home           btrfs   rw,subvol=@home        0      0"
-                echo "  UUID=${boot_uuid}  /boot           vfat    rw,defaults            0      2"
-                echo "  UUID=${swap_uuid}  swap            swap    defaults               0      0"
-                echo ""
-                echo "  Run: genfstab -U ${mnt} > ${mnt}/etc/fstab"
-                echo ""
-
                 COMPLETED[2]=1
                 ;;
 
@@ -1016,13 +990,8 @@ main() {
                 success "12 domestic mirrors written."
                 echo ""
 
-                # Enable parallel downloads in live env
                 echo ">>> Enabling parallel downloads (5) in /etc/pacman.conf ..."
-                if grep -q '^ParallelDownloads' /etc/pacman.conf 2>/dev/null; then
-                    sed -i 's/^ParallelDownloads.*/ParallelDownloads = 5/' /etc/pacman.conf
-                else
-                    sed -i '/^\[options\]/a ParallelDownloads = 5' /etc/pacman.conf
-                fi
+                enable_parallel_downloads
                 success "ParallelDownloads = 5"
                 echo ""
 
@@ -1065,13 +1034,8 @@ main() {
                 cp /etc/pacman.d/mirrorlist "${mnt}/etc/pacman.d/mirrorlist" 2>/dev/null || true
                 success "Mirror list copied to target system."
 
-                # Enable parallel downloads in chroot
                 echo ">>> Enabling parallel downloads in target system ..."
-                if grep -q '^ParallelDownloads' "${mnt}/etc/pacman.conf" 2>/dev/null; then
-                    sed -i 's/^ParallelDownloads.*/ParallelDownloads = 5/' "${mnt}/etc/pacman.conf"
-                else
-                    sed -i '/^\[options\]/a ParallelDownloads = 5' "${mnt}/etc/pacman.conf"
-                fi
+                enable_parallel_downloads "${mnt}/etc/pacman.conf"
                 success "ParallelDownloads = 5 enabled in target system."
 
                 # Generate fstab
@@ -1200,8 +1164,7 @@ EOF
 
                 echo ""
                 echo "  Configuring mkinitcpio for btrfs ..."
-                arch-chroot "$mnt" sed -i 's/^MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
-                arch-chroot "$mnt" sed -i 's/^#MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
+                arch-chroot "$mnt" sed -i 's/^#\?MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
                 echo "  Regenerating initramfs for linux-zen and linux-lts in parallel ..."
                 run_parallel \
                     "linux-zen initramfs"  "arch-chroot \"$mnt\" mkinitcpio -p linux-zen" \
@@ -1257,24 +1220,24 @@ EOF
                 if (( SELECT_MENU_RESULT == 1 )); then
                     success "Skipped user creation."
                 else
-                        read -rp "$(echo -e "${CYAN}  Enter username: ${RESET}") " username
-                        if [[ -n "$username" ]]; then
-                            while true; do
-                                read -rsp "$(echo -e "${CYAN}  Enter password: ${RESET}") " up1; echo ""
-                                read -rsp "$(echo -e "${CYAN}  Confirm password: ${RESET}") " up2; echo ""
-                                if [[ "$up1" != "$up2" ]]; then
-                                    warning "Passwords do not match."
-                                elif [[ -z "$up1" ]]; then
-                                    warning "Password cannot be empty."
-                                else
-                                    arch-chroot "$mnt" useradd -m -G wheel -s /bin/bash "$username"
-                                    echo "$username:$up1" | arch-chroot "$mnt" chpasswd
-                                    success "User '$username' created (wheel group)."
-                                    success "Run 'visudo' inside the system to enable sudo."
-                                    break
-                                fi
-                            done
-                        fi
+                    read -rp "$(echo -e "${CYAN}  Enter username: ${RESET}") " username
+                    if [[ -n "$username" ]]; then
+                        while true; do
+                            read -rsp "$(echo -e "${CYAN}  Enter password: ${RESET}") " up1; echo ""
+                            read -rsp "$(echo -e "${CYAN}  Confirm password: ${RESET}") " up2; echo ""
+                            if [[ "$up1" != "$up2" ]]; then
+                                warning "Passwords do not match."
+                            elif [[ -z "$up1" ]]; then
+                                warning "Password cannot be empty."
+                            else
+                                arch-chroot "$mnt" useradd -m -G wheel -s /bin/bash "$username"
+                                echo "$username:$up1" | arch-chroot "$mnt" chpasswd
+                                success "User '$username' created (wheel group)."
+                                success "Run 'visudo' inside the system to enable sudo."
+                                break
+                            fi
+                        done
+                    fi
                 fi
 
                 # ── Finalize ──
