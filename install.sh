@@ -84,12 +84,7 @@ LOGO
 STEPS=(
     "Risk Disclaimer"
     "Disk Selection (+ Firmware, Bootloader)"
-    "Installation Mode"
-    "Find Existing /home"
-    "Confirmation"
-    "GPT Check"
-    "Partitioning + Layout + Confirm"
-    "Format + Mount + fstab"
+    "Install & Partition"
     "Install Base System (+Timezone, Locale)"
     "Hostname"
     "Bootloader"
@@ -369,7 +364,7 @@ main() {
     local MIN_ROOT=10
     local auto_step=-1
     STEP_SELECTED=0
-    COMPLETED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+    COMPLETED=(0 0 0 0 0 0 0 0 0)
 
     while true; do
         if (( auto_step >= 0 )); then
@@ -500,7 +495,6 @@ main() {
                 esac
                 success "Mode: ${mode} install"
 
-                COMPLETED[$step]=1
                 if [[ "$mode" == "reinstall" ]]; then
                     auto_step=3
                 else
@@ -539,7 +533,7 @@ main() {
                 success "Home partition number: ${home_num}"
                 echo ""
 
-                COMPLETED[$step]=1
+                auto_step=4
                 ;;
 
             # ─────────────────────────────────────
@@ -547,7 +541,7 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 4
+                show_progress 2
                 section "Step 4: Confirmation"
                 warning "Target disk: $disk"
                 if [[ "$mode" == "clean" ]]; then
@@ -562,7 +556,7 @@ main() {
                     *) success "Cancelled by user."; exit 0 ;;
                 esac
 
-                COMPLETED[$step]=1
+                auto_step=5
                 ;;
 
             # ─────────────────────────────────────
@@ -570,7 +564,7 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 5
+                show_progress 2
                 section "Step 5: GPT Check"
 
                 local label
@@ -585,7 +579,7 @@ main() {
                 fi
                 echo ""
 
-                COMPLETED[$step]=1
+                auto_step=6
                 ;;
 
             # ─────────────────────────────────────
@@ -593,7 +587,7 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 6
+                show_progress 2
                 section "Step 6: Partitioning + Layout + Confirm"
 
                 boot_size="3G"
@@ -917,7 +911,7 @@ main() {
                 echo ""
 
                 # ── Proceed directly to format + mount (no confirm needed) ──
-                COMPLETED[$step]=1
+                auto_step=7
                 ;;
 
             # ─────────────────────────────────────
@@ -925,7 +919,7 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 7
+                show_progress 2
                 section "Step 7: Format + Mount + fstab"
 
                 # ── Format all partitions in parallel ──
@@ -1019,7 +1013,8 @@ main() {
                 echo "  Run: genfstab -U ${mnt} > ${mnt}/etc/fstab"
                 echo ""
 
-                COMPLETED[$step]=1
+                COMPLETED[2]=1
+                auto_step=8
                 ;;
 
             # ─────────────────────────────────────
@@ -1027,7 +1022,7 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 8
+                show_progress 3
                 section "Step 8: Install Base System"
 
                 echo "  Installing base system (pacstrap)..."
@@ -1080,43 +1075,9 @@ main() {
                     continue
                 fi
 
-                # Pacstrap with retry
-                retry=0
-                max_retries=3
-                pacstrap_ok=0
-                while (( retry < max_retries )); do
-                    echo ">>> pacstrap -K ${mnt} (attempt $((retry+1))/${max_retries}) ..."
-                    if pacstrap -K "$mnt" $pkg_base $pkg_extra $pkg_boot; then
-                        pacstrap_ok=1
-                        break
-                    fi
-                    retry=$((retry + 1))
-                    if (( retry < max_retries )); then
-                        warning "pacstrap failed (attempt $retry/${max_retries}), rewriting mirrors & retrying ..."
-                        write_cn_mirrors
-                        sleep 1
-                    fi
-                done
-
-                # Fallback: reflector
-                if [[ $pacstrap_ok -eq 0 ]] && command -v reflector &>/dev/null; then
-                    echo ""
-                    warning "Static mirrors exhausted, trying reflector to find more mirrors ..."
-                    if timeout 30 reflector --verbose --country China --sort score --latest 30 --save /etc/pacman.d/mirrorlist 2>&1; then
-                        success "Reflector found additional mirrors, retrying pacstrap ..."
-                        if pacstrap -K "$mnt" $pkg_base $pkg_extra $pkg_boot; then
-                            pacstrap_ok=1
-                        fi
-                    else
-                        warning "Reflector failed or timed out."
-                    fi
-                elif [[ $pacstrap_ok -eq 0 ]]; then
-                    warning "reflector not available, cannot try additional mirrors."
-                fi
-
-                if [[ $pacstrap_ok -eq 0 ]]; then
-                    error "pacstrap failed after all attempts."
-                    warning "You can retry manually: pacstrap -K ${mnt} ${pkg_base} ${pkg_extra} ${pkg_boot}"
+                echo ">>> Running pacstrap -K ${mnt} ..."
+                if ! pacstrap -K "$mnt" $pkg_base $pkg_extra $pkg_boot; then
+                    error "pacstrap failed. Check network and mirrors, then retry from menu."
                     continue
                 fi
                 success "Base system installed."
@@ -1170,7 +1131,7 @@ FSTAB
                 echo "LANG=en_US.UTF-8" > "${mnt}/etc/locale.conf"
                 success "Locale set to en_US.UTF-8"
 
-                COMPLETED[$step]=1
+                COMPLETED[3]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1178,7 +1139,7 @@ FSTAB
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 9
+                show_progress 2
                 section "Step 9: Hostname"
                 local hostname="archlinux"
                 read -rp "$(echo -e "${CYAN}  Enter hostname (default archlinux): ${RESET}") " hostname_input
@@ -1191,7 +1152,7 @@ FSTAB
 EOF
                 success "Hostname set to ${hostname}"
 
-                COMPLETED[$step]=1
+                COMPLETED[4]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1199,7 +1160,7 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 10
+                show_progress 2
                 section "Step 10: Bootloader"
                 info "Installing bootloader (${bootloader}) ..."
 
@@ -1234,7 +1195,7 @@ EOF
                     success "GRUB installed."
                 fi
 
-                COMPLETED[$step]=1
+                COMPLETED[5]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1242,7 +1203,7 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 11
+                show_progress 2
                 section "Step 11: Services"
 
                 echo "  Enabling NetworkManager ..."
@@ -1280,7 +1241,7 @@ EOF
                 arch-chroot "$mnt" sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
                 success "sudo enabled for wheel group."
 
-                COMPLETED[$step]=1
+                COMPLETED[6]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1288,11 +1249,13 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 12
+                show_progress 2
                 section "Step 12: Set Root Password"
-                read -rp "$(echo -e "${YELLOW}  Set root password now? [Y/n]: ${RESET}") " ans
+                echo -ne "  ${YELLOW}Set root password now? [Y/n]: ${RESET}"
+                read -rsn1 ans
+                echo ""
                 case "$ans" in
-                    n|N) success "Skipped."; COMPLETED[$step]=1; continue ;;
+                    n|N) success "Skipped."; COMPLETED[7]=1; continue ;;
                     *) ;;
                 esac
 
@@ -1310,7 +1273,7 @@ EOF
                     fi
                 done
 
-                COMPLETED[$step]=1
+                COMPLETED[7]=1
                 ;;
 
             # ─────────────────────────────────────
@@ -1318,9 +1281,11 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 13
+                show_progress 3
                 section "Step 13: Create User"
-                read -rp "$(echo -e "${YELLOW}  Create a new user? [Y/n]: ${RESET}") " ans
+                echo -ne "  ${YELLOW}Create a new user? [Y/n]: ${RESET}"
+                read -rsn1 ans
+                echo ""
                 case "$ans" in
                     n|N) success "Skipped user creation." ;;
                     *)
@@ -1359,7 +1324,7 @@ EOF
                         ;;
                     *) success "You can reboot later with: reboot" ;;
                 esac
-                COMPLETED[$step]=1; break   # exit while loop
+                COMPLETED[8]=1; break   # exit while loop
                 ;;
         esac
     done
