@@ -88,12 +88,8 @@ STEPS=(
     "Find Existing /home"
     "Confirmation"
     "GPT Check"
-    "Partitioning"
-    "Partition Layout"
-    "Confirm Format"
-    "Format Partitions"
-    "Mount Partitions"
-    "fstab Reference"
+    "Partitioning + Layout + Confirm"
+    "Format + Mount + fstab"
     "Install Base System (+Timezone, Locale)"
     "Hostname"
     "Bootloader"
@@ -453,12 +449,12 @@ main() {
                 ;;
 
             # ─────────────────────────────────────
-            6) # Partitioning
+            6) # Partitioning + Layout + Confirm
             # ─────────────────────────────────────
                 clear
                 print_logo
                 show_progress 6
-                section "Step 6: Partitioning"
+                section "Step 6: Partitioning + Layout + Confirm"
 
                 boot_size="3G"
                 BOOT_PART=""; SWAP_PART=""; ROOT_PART=""; HOME_PART=""
@@ -477,7 +473,6 @@ main() {
                     echo ""
                     read -rp "$(echo -e "${CYAN}  Enter 1/2/3 (default 1): ${RESET}") " split_choice
 
-                    # Ask swap size for modes 1 & 2
                     if [[ "${split_choice:-1}" != "3" ]]; then
                         echo ""
                         swap_size=$(get_swap_size)
@@ -486,7 +481,6 @@ main() {
                         echo ""
                     fi
 
-                    # Calculate remaining space for non-mode-3
                     if [[ "${split_choice:-1}" != "3" ]]; then
                         local boot_gb_parsed
                         boot_gb_parsed=$(parse_gb "$boot_size")
@@ -561,17 +555,12 @@ main() {
                     echo "  Total : ${disk_gib}G | Boot: ${boot_size} | Swap: ${swap_size} | Root: ${root_gb}G | Home: ${home_gb}G"
                     echo ""
 
-                    # Minimum root size check
                     if float_lt "$root_gb" "$MIN_ROOT"; then
                         error "Root partition too small: ${root_gb}G < ${MIN_ROOT}G minimum"
                         error "Dual kernel (zen+lts) + base-devel + packages + pacman cache need at least ${MIN_ROOT}G."
                         warning "Try: larger disk, smaller swap, or manual sizing."
                         exit 1
                     fi
-
-                    # ── create_partitions_clean (inline) ──
-                    echo ""
-                    section "Step 6: Create Partitions (Clean Install)"
 
                     sgdisk -Z "$disk"
                     success "All partition data wiped."
@@ -587,18 +576,13 @@ main() {
                     fi
 
                     [[ "$firmware" == "uefi" ]] && idx=1 || idx=2
-
-                    # root
                     idx=$((idx + 1))
                     sgdisk -n ${idx}:0:+${root_gb}G -t ${idx}:8300 -c ${idx}:"ROOT" "$disk"
                     success "Root (${root_gb}G)"
-
-                    # home
                     idx=$((idx + 1))
                     sgdisk -n ${idx}:0:+${home_gb}G -t ${idx}:8300 -c ${idx}:"HOME" "$disk"
                     success "Home (${home_gb}G)"
 
-                    # swap
                     if float_gt "$swap_gb" "0"; then
                         idx=$((idx + 1))
                         sgdisk -n ${idx}:0:+${swap_size} -t ${idx}:8200 -c ${idx}:"SWAP" "$disk"
@@ -609,7 +593,6 @@ main() {
 
                     sync_partitions "$disk"
 
-                    # Assign partition variables
                     if [[ "$firmware" == "uefi" ]]; then
                         BOOT_PART=$(get_part_dev "$disk" 1)
                         ROOT_PART=$(get_part_dev "$disk" 2)
@@ -683,9 +666,6 @@ main() {
                         exit 1
                     fi
 
-                    # ── create_partitions_reinstall (inline) ──
-                    section "Step 6: Recreate Partitions (Keep /home)"
-
                     # Save home sector range
                     home_start=$(sgdisk -i "${home_num}" "$disk" 2>/dev/null | grep "^First sector:" | sed 's/^First sector: *\([0-9]*\).*/\1/')
                     home_end=$(sgdisk -i "${home_num}" "$disk" 2>/dev/null   | grep "^Last sector:"  | sed 's/^Last sector: *\([0-9]*\).*/\1/')
@@ -710,14 +690,12 @@ main() {
                         exit 1
                     fi
 
-                    # Zap and recreate
                     sgdisk -Z "$disk"
                     success "All partition data wiped (home sector range saved)"
 
                     cur=2048
                     part_num=0
 
-                    # boot
                     boot_sec=$(echo "$boot_gb_local * 1024^3 / 512" | bc)
                     boot_end=$((cur + boot_sec - 1))
                     if [[ "$firmware" == "uefi" ]]; then
@@ -737,8 +715,6 @@ main() {
                     fi
 
                     cur=$((boot_end + 1))
-
-                    # swap
                     part_num=$((part_num + 1))
                     swap_sec=$(echo "$swap_gb_local * 1024^3 / 512" | bc)
                     swap_end=$((cur + swap_sec - 1))
@@ -746,22 +722,18 @@ main() {
                     success "Swap (${swap_size})"
 
                     cur=$((swap_end + 1))
-
-                    # root
                     part_num=$((part_num + 1))
                     root_end=$((home_start - 1))
                     sgdisk -n ${part_num}:${cur}:${root_end} -t ${part_num}:8300 -c ${part_num}:"ROOT" "$disk"
                     success "Root (fills to sector ${root_end})"
 
-                    # home (restore at original sector range)
                     part_num=$((part_num + 1))
                     sgdisk -n ${part_num}:${home_start}:${home_end} -t ${part_num}:8300 -c ${part_num}:"HOME" "$disk"
                     success "/home preserved (now partition #${part_num}, same sector range)"
 
                     sync_partitions "$disk"
-                    home_num=$part_num  # update to new home partition number
+                    home_num=$part_num
 
-                    # Assign partition variables
                     if [[ "$firmware" == "uefi" ]]; then
                         BOOT_PART=$(get_part_dev "$disk" 1)
                         SWAP_PART=$(get_part_dev "$disk" 2)
@@ -777,16 +749,9 @@ main() {
                 fi
                 echo ""
 
-                step=7
-                ;;
-
-            # ─────────────────────────────────────
-            7) # Show Partition Layout
-            # ─────────────────────────────────────
-                clear
-                echo ""
+                # ── Show Partition Layout (inline, no separate step) ──
                 echo "========================================================================================================================="
-                echo " Step 7: Partition Layout"
+                echo " Partition Layout"
                 echo "========================================================================================================================="
                 echo ""
                 echo "  Device       Size        FS          Subvol     Mount"
@@ -804,16 +769,7 @@ main() {
                 printf "  %-12s %-11s %-11s %-10s %s\n" "$SWAP_PART" "$swap_size_str" "swap" "—" "[SWAP]"
                 echo ""
 
-                step=8
-                ;;
-
-            # ─────────────────────────────────────
-            8) # Confirm Format
-            # ─────────────────────────────────────
-                clear
-                print_logo
-                show_progress 8
-                section "Step 8: Confirm Format"
+                # ── Confirm Format (inline, no separate step) ──
                 msg="Format and mount these partitions?"
                 [[ "$FORMAT_HOME" == "false" ]] && msg="Format boot+swap+root and mount all (home preserved)?"
                 read -rp "$(echo -e "${YELLOW}  ${msg} [Y/n]: ${RESET}") " ans
@@ -826,19 +782,18 @@ main() {
                 esac
                 echo ""
 
-                step=9
+                step=7
                 ;;
 
             # ─────────────────────────────────────
-            9) # Format Partitions
+            7) # Format + Mount + fstab
             # ─────────────────────────────────────
                 clear
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 9: Format Partitions"
-                echo "========================================================================================================================="
+                print_logo
+                show_progress 7
+                section "Step 7: Format + Mount + fstab"
 
-                # Phase 1: Format all partitions in parallel
+                # ── Format all partitions in parallel ──
                 echo "  Formatting all partitions in parallel ..."
                 local -a f_args=()
                 f_args+=("boot (FAT32)" "mkfs.fat -F32 -n EFI $BOOT_PART")
@@ -851,7 +806,6 @@ main() {
                 fi
                 run_parallel "${f_args[@]}"
 
-                # Phase 2: Create btrfs subvolumes in parallel
                 echo ""
                 echo "  Creating btrfs subvolumes in parallel ..."
                 local -a s_args=()
@@ -860,22 +814,10 @@ main() {
                     s_args+=("home @home subvolume" "mnt_tmp=\$(mktemp -d); mount $HOME_PART \$mnt_tmp; btrfs subvolume create \${mnt_tmp}/@home; umount \$mnt_tmp; rmdir \$mnt_tmp")
                 fi
                 run_parallel "${s_args[@]}"
-
                 success "All partitions formatted and subvolumes created."
                 echo ""
 
-                step=10
-                ;;
-
-            # ─────────────────────────────────────
-            10) # Mount Partitions
-            # ─────────────────────────────────────
-                clear
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 10: Mount Partitions"
-                echo "========================================================================================================================="
-
+                # ── Mount partitions ──
                 echo "  Mounting root (@) to ${mnt} ..."
                 while ! mount -o subvol=@ "$ROOT_PART" "$mnt"; do
                     warning "@ subvolume missing? Trying to create it ..."
@@ -895,7 +837,6 @@ main() {
                     retry_or_exit "Failed to mount boot partition ($BOOT_PART)"
                 done
 
-                # Probe home for @home subvolume
                 echo "  Probing home partition for @home subvolume ..."
                 mnt_tmp=$(mktemp -d)
                 if mount "$HOME_PART" "$mnt_tmp" 2>/dev/null; then
@@ -918,20 +859,12 @@ main() {
                     echo "  Enabling swap ..."
                     swapon "$SWAP_PART"
                 fi
-
                 success "All partitions mounted."
                 echo ""
 
-                step=11
-                ;;
-
-            # ─────────────────────────────────────
-            11) # fstab Reference
-            # ─────────────────────────────────────
-                clear
-                echo ""
+                # ── fstab reference (informational) ──
                 echo "========================================================================================================================="
-                echo " Step 11: fstab Reference"
+                echo " fstab Reference"
                 echo "========================================================================================================================="
                 echo ""
                 echo "  After genfstab, these entries will be in ${mnt}/etc/fstab:"
@@ -951,22 +884,19 @@ main() {
                 echo "  Run: genfstab -U ${mnt} > ${mnt}/etc/fstab"
                 echo ""
 
-                step=12
+                step=8
                 ;;
 
             # ─────────────────────────────────────
-            12) # Install Base System (pacstrap)
+            8) # Install Base System (pacstrap)
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 12
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 12: Install Base System"
-                echo "========================================================================================================================="
+                show_progress 8
+                section "Step 8: Install Base System"
                 read -rp "$(echo -e "${YELLOW}  Install base system now? (pacstrap) [Y/n]: ${RESET}") " ans
                 case "$ans" in
-                    n|N) success "Skipped system installation."; step=13; continue ;;
+                    n|N) success "Skipped system installation."; step=9; continue ;;
                     *) ;;
                 esac
 
@@ -1026,7 +956,7 @@ main() {
                     error "Root partition has less than 10GB free (${root_free_kb} KB)."
                     error "pacstrap with dual kernels needs at least 10GB."
                     warning "Check partition sizes with: lsblk ${ROOT_PART}"
-                    step=13; continue
+                    step=9; continue
                 fi
 
                 # Pacstrap with retry
@@ -1066,7 +996,7 @@ main() {
                 if [[ $pacstrap_ok -eq 0 ]]; then
                     error "pacstrap failed after all attempts."
                     warning "You can retry manually: pacstrap -K ${mnt} ${pkg_base} ${pkg_extra} ${pkg_boot}"
-                    step=13; continue
+                    step=9; continue
                 fi
                 success "Base system installed."
 
@@ -1119,19 +1049,16 @@ FSTAB
                 echo "LANG=en_US.UTF-8" > "${mnt}/etc/locale.conf"
                 success "Locale set to en_US.UTF-8"
 
-                step=13
+                step=9
                 ;;
 
             # ─────────────────────────────────────
-            13) # Configure Hostname
+            9) # Configure Hostname
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 13
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 13: Hostname"
-                echo "========================================================================================================================="
+                show_progress 9
+                section "Step 9: Hostname"
                 local hostname="archlinux"
                 read -rp "$(echo -e "${CYAN}  Enter hostname (default archlinux): ${RESET}") " hostname_input
                 [[ -n "$hostname_input" ]] && hostname="$hostname_input"
@@ -1143,19 +1070,16 @@ FSTAB
 EOF
                 success "Hostname set to ${hostname}"
 
-                step=14
+                step=10
                 ;;
 
             # ─────────────────────────────────────
-            14) # Install Bootloader
+            10) # Install Bootloader
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 14
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 14: Bootloader"
-                echo "========================================================================================================================="
+                show_progress 10
+                section "Step 10: Bootloader"
                 info "Installing bootloader (${bootloader}) ..."
 
                 root_partuuid=$(blkid -s PARTUUID -o value "$ROOT_PART" 2>/dev/null)
@@ -1189,19 +1113,16 @@ EOF
                     success "GRUB installed."
                 fi
 
-                step=15
+                step=11
                 ;;
 
             # ─────────────────────────────────────
-            15) # Enable Services
+            11) # Enable Services
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 15
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 15: Services"
-                echo "========================================================================================================================="
+                show_progress 11
+                section "Step 11: Services"
 
                 echo "  Enabling NetworkManager ..."
                 arch-chroot "$mnt" systemctl enable NetworkManager
@@ -1215,13 +1136,11 @@ EOF
                 arch-chroot "$mnt" systemctl enable cups
                 success "Printing (cups) enabled."
 
-                # Audio (PipeWire)
                 echo ""
                 echo "  Enabling audio (PipeWire) ..."
                 arch-chroot "$mnt" systemctl --global enable pipewire pipewire-pulse wireplumber 2>/dev/null || true
                 success "Audio (PipeWire) enabled."
 
-                # Initramfs with btrfs
                 echo ""
                 echo "  Configuring mkinitcpio for btrfs ..."
                 arch-chroot "$mnt" sed -i 's/^MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
@@ -1232,32 +1151,27 @@ EOF
                     "linux-lts initramfs"  "arch-chroot \"$mnt\" mkinitcpio -p linux-lts"
                 success "Initramfs regenerated."
 
-                # Verify boot files
                 echo "  Boot files:"
                 ls -lh "${mnt}/boot/vmlinuz-"* "${mnt}/boot/initramfs-"*.img 2>/dev/null || warning "Missing boot files"
 
-                # Enable sudo for wheel
                 echo ""
                 echo "  Enabling sudo for wheel group ..."
                 arch-chroot "$mnt" sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
                 success "sudo enabled for wheel group."
 
-                step=16
+                step=12
                 ;;
 
             # ─────────────────────────────────────
-            16) # Set Root Password
+            12) # Set Root Password
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 16
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 16: Set Root Password"
-                echo "========================================================================================================================="
+                show_progress 12
+                section "Step 12: Set Root Password"
                 read -rp "$(echo -e "${YELLOW}  Set root password now? [Y/n]: ${RESET}") " ans
                 case "$ans" in
-                    n|N) success "Skipped."; step=17; continue ;;
+                    n|N) success "Skipped."; step=13; continue ;;
                     *) ;;
                 esac
 
@@ -1275,50 +1189,42 @@ EOF
                     fi
                 done
 
-                step=17
+                step=13
                 ;;
 
             # ─────────────────────────────────────
-            17) # Create User
+            13) # Create User + Finalize
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 17
-                echo ""
-                echo "========================================================================================================================="
-                echo " Step 17: Create User"
-                echo "========================================================================================================================="
+                show_progress 13
+                section "Step 13: Create User"
                 read -rp "$(echo -e "${YELLOW}  Create a new user? [Y/n]: ${RESET}") " ans
                 case "$ans" in
-                    n|N) success "Skipped user creation."; step=18; continue ;;
-                    *) ;;
+                    n|N) success "Skipped user creation." ;;
+                    *)
+                        read -rp "$(echo -e "${CYAN}  Enter username: ${RESET}") " username
+                        if [[ -n "$username" ]]; then
+                            while true; do
+                                read -rsp "$(echo -e "${CYAN}  Enter password: ${RESET}") " up1; echo ""
+                                read -rsp "$(echo -e "${CYAN}  Confirm password: ${RESET}") " up2; echo ""
+                                if [[ "$up1" != "$up2" ]]; then
+                                    warning "Passwords do not match."
+                                elif [[ -z "$up1" ]]; then
+                                    warning "Password cannot be empty."
+                                else
+                                    arch-chroot "$mnt" useradd -m -G wheel -s /bin/bash "$username"
+                                    echo "$username:$up1" | arch-chroot "$mnt" chpasswd
+                                    success "User '$username' created (wheel group)."
+                                    success "Run 'visudo' inside the system to enable sudo."
+                                    break
+                                fi
+                            done
+                        fi
+                        ;;
                 esac
 
-                read -rp "$(echo -e "${CYAN}  Enter username: ${RESET}") " username
-                if [[ -n "$username" ]]; then
-                    while true; do
-                        read -rsp "$(echo -e "${CYAN}  Enter password: ${RESET}") " up1; echo ""
-                        read -rsp "$(echo -e "${CYAN}  Confirm password: ${RESET}") " up2; echo ""
-                        if [[ "$up1" != "$up2" ]]; then
-                            warning "Passwords do not match."
-                        elif [[ -z "$up1" ]]; then
-                            warning "Password cannot be empty."
-                        else
-                            arch-chroot "$mnt" useradd -m -G wheel -s /bin/bash "$username"
-                            echo "$username:$up1" | arch-chroot "$mnt" chpasswd
-                            success "User '$username' created (wheel group)."
-                            success "Run 'visudo' inside the system to enable sudo."
-                            break
-                        fi
-                    done
-                fi
-
-                step=18
-                ;;
-
-            # ─────────────────────────────────────
-            18) # Finalize
-            # ─────────────────────────────────────
+                # ── Finalize ──
                 echo ""
                 echo -e "${GREEN}${BOLD}  ✅ System installation completed!${RESET}"
                 echo -e "${GREEN}  You can now reboot into your new system.${RESET}"

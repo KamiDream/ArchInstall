@@ -2,7 +2,7 @@
 
 ## 概述
 
-`install.sh` 是一个交互式 Arch Linux 自动化安装脚本，用于替代 `archinstall`，提供从磁盘分区、格式化、基础系统安装到系统配置的完整安装流程。
+`install.sh` 是一个交互式 Arch Linux 自动化安装脚本，用于替代 `archinstall`，提供从磁盘分区、格式化、基础系统安装到系统配置的完整安装流程。脚本采用 `case` 语句驱动的顺序步骤执行，分区→格式化→挂载→安装系统一气呵成。
 
 ## 功能特性
 
@@ -44,7 +44,7 @@
 
 ### 安装的软件包
 
-- **基础系统**: `base`, `base-devel`, `linux-zen`, `linux-zen-headers`, `linux-lts`, `linux-lts-headers`, `linux-firmware`
+- **基础系统**: `base`, `base-devel`, `linux-zen`, `linux-zen-headers`, `linux-lts`, `linux-firmware`
 - **文件系统工具**: `dosfstools`, `btrfs-progs`
 - **网络与蓝牙**: `networkmanager`, `bluez`, `bluez-utils`
 - **打印**: `cups`, `cups-filters`, `ghostscript`
@@ -67,7 +67,7 @@
 
 - **分区格式化并行化**：boot、swap、root、home 四个分区同时格式化
 - **initramfs 并行生成**：linux-zen 和 linux-lts 的 mkinitcpio 同时执行
-- **pacman 并行下载**：自动启用 `ParallelDownloads = 5`
+- **pacman 并行下载**：自动启用 `ParallelDownloads = 5`（live 环境 + 目标系统）
 - **partprobe 优化**：使用 `udevadm settle` 替代固定 sleep 等待
 - **镜像源冗余**：直接写入 12 个国内高可用镜像，无网络请求延迟
 
@@ -121,14 +121,26 @@ chmod +x install.sh
 ./install.sh
 ```
 
-按交互提示依次完成：
+按交互提示依次完成 14 个步骤：
 
-1. 风险确认（`[y/N]`）
-2. 选择目标磁盘 → 选择固件类型与引导加载程序
-3. 选择安装模式
-4. 确认分区布局
-5. 安装基础系统（含时区、locale 自动配置）
-6. 配置系统（主机名、引导程序、服务、用户密码等）
+| 步骤 | 内容 |
+|------|------|
+| 0 | 风险确认（`[y/N]`）+ 依赖检查 |
+| 1 | 选择目标磁盘 → 固件类型 → 引导加载程序 |
+| 2 | 选择安装模式（Clean / Reinstall） |
+| 3 | 查找现有 /home 分区（仅 Reinstall 模式） |
+| 4 | 确认破坏性操作（`[y/N]`） |
+| 5 | 确保 GPT 分区表 |
+| 6 | 分区（含布局预览 + 格式化确认） |
+| 7 | 格式化 + 挂载 + fstab 参考（自动执行） |
+| 8 | 安装基础系统（pacstrap，含时区/locale） |
+| 9 | 配置主机名 |
+| 10 | 安装引导加载程序 |
+| 11 | 启用系统服务 + initramfs + sudo |
+| 12 | 设置 root 密码 |
+| 13 | 创建普通用户 + 完成重启 |
+
+> **步骤 6-7-8 紧密衔接**：分区完成→立即分配挂载点→立即安装系统，中间无需额外确认。
 
 ---
 
