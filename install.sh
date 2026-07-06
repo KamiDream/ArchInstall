@@ -206,7 +206,6 @@ select_menu() {
 
     while true; do
         # Print prompt and options
-        echo ""
         echo -e "  ${prompt}"
         echo ""
         for i in "${!options[@]}"; do
@@ -235,7 +234,7 @@ select_menu() {
                     ;;
             esac
             # Move cursor up to re-render options
-            local total_lines=$((opt_count + 5))
+            local total_lines=$((opt_count + 4))
             for ((j=0; j<total_lines; j++)); do
                 echo -ne "\e[1A\e[2K"
             done
@@ -406,12 +405,10 @@ main() {
                 echo ""
                 warning "USE AT YOUR OWN RISK."
                 echo ""
-                read -rp "$(echo -e "${RED}${BOLD}  Continue? [y/N]: ${RESET}") " acceptance
-                echo ""
-                case "$acceptance" in
-                    y|Y) ;;
-                    *) success "Aborted by user."; exit 0 ;;
-                esac
+                select_menu "Proceed with installation?" "No (abort)" "Yes (proceed)"
+                if (( SELECT_MENU_RESULT == 0 )); then
+                    success "Aborted by user."; exit 0
+                fi
                 success "Risk acknowledged. Proceeding..."
                 echo ""
 
@@ -558,11 +555,10 @@ main() {
                     warning "Partitions boot, swap, root will be RECREATED."
                     warning "/home will be PRESERVED (not formatted)."
                 fi
-                read -rp "$(echo -e "${YELLOW}  Continue? [y/N]: ${RESET}") " ans
-                case "$ans" in
-                    y|Y) ;;
-                    *) success "Cancelled by user."; exit 0 ;;
-                esac
+                select_menu "Proceed with destructive operations?" "No (cancel)" "Yes (proceed)"
+                if (( SELECT_MENU_RESULT == 0 )); then
+                    success "Cancelled by user."; exit 0
+                fi
 
                 auto_step=5
                 ;;
@@ -1258,13 +1254,10 @@ EOF
                 print_logo
                 show_progress 2
                 section "Step 12: Set Root Password"
-                echo -ne "  ${YELLOW}Set root password now? [Y/n]: ${RESET}"
-                read -rsn1 ans
-                echo ""
-                case "$ans" in
-                    n|N) success "Skipped."; COMPLETED[7]=1; continue ;;
-                    *) ;;
-                esac
+                select_menu "Set root password now?" "Yes" "No (skip)"
+                if (( SELECT_MENU_RESULT == 1 )); then
+                    success "Skipped."; COMPLETED[7]=1; continue
+                fi
 
                 while true; do
                     read -rsp "$(echo -e "${CYAN}  Enter root password: ${RESET}") " rp1; echo ""
@@ -1290,12 +1283,10 @@ EOF
                 print_logo
                 show_progress 3
                 section "Step 13: Create User"
-                echo -ne "  ${YELLOW}Create a new user? [Y/n]: ${RESET}"
-                read -rsn1 ans
-                echo ""
-                case "$ans" in
-                    n|N) success "Skipped user creation." ;;
-                    *)
+                select_menu "Create a new user?" "Yes" "No (skip)"
+                if (( SELECT_MENU_RESULT == 1 )); then
+                    success "Skipped user creation."
+                else
                         read -rp "$(echo -e "${CYAN}  Enter username: ${RESET}") " username
                         if [[ -n "$username" ]]; then
                             while true; do
@@ -1314,23 +1305,21 @@ EOF
                                 fi
                             done
                         fi
-                        ;;
-                esac
+                fi
 
                 # ── Finalize ──
                 echo ""
                 echo -e "${GREEN}${BOLD}  ✅ System installation completed!${RESET}"
                 echo -e "${GREEN}  You can now reboot into your new system.${RESET}"
                 echo ""
-                read -rp "$(echo -e "${YELLOW}  Reboot now? [y/N]: ${RESET}") " ans
-                case "$ans" in
-                    y|Y)
-                        echo "  Rebooting in 3 seconds ..."
-                        sleep 3
-                        reboot
-                        ;;
-                    *) success "You can reboot later with: reboot" ;;
-                esac
+                select_menu "Reboot now?" "No" "Yes"
+                if (( SELECT_MENU_RESULT == 0 )); then
+                    success "You can reboot later with: reboot"
+                else
+                    echo "  Rebooting in 3 seconds ..."
+                    sleep 3
+                    reboot
+                fi
                 COMPLETED[8]=1; break   # exit while loop
                 ;;
         esac
