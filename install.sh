@@ -116,6 +116,70 @@ show_progress() {
 }
 
 # ═══════════════════════════════════════════════
+# Interactive selection menu (↑/↓ navigation)
+# Usage: select_menu "prompt" "opt1" "opt2" ...
+# Reads arrow keys; sets global SELECT_MENU_RESULT to 0-based index on Enter
+# ═══════════════════════════════════════════════
+SELECT_MENU_RESULT=0
+
+select_menu() {
+    local prompt="$1"
+    shift
+    local -a options=("$@")
+    local opt_count=${#options[@]}
+    local selected=0
+    local key seq
+
+    # Hide cursor during menu
+    echo -ne "\e[?25l"
+
+    while true; do
+        # Print prompt and options
+        echo -e "\n  ${prompt}"
+        echo ""
+        for i in "${!options[@]}"; do
+            if [[ $i -eq $selected ]]; then
+                echo -e "  ${CYAN}▶ ${options[$i]}${RESET}"
+            else
+                echo -e "    ${options[$i]}"
+            fi
+        done
+        echo ""
+        echo -e "  ${YELLOW}↑/↓ 导航 • Enter 确认${RESET}"
+
+        # Read single keypress
+        read -rsn1 key
+        if [[ "$key" == $'\e' ]]; then
+            # Escape sequence (arrow keys)
+            read -rsn2 -t 0.1 seq 2>/dev/null || true
+            case "$seq" in
+                '[A')  # Up
+                    ((selected--))
+                    [[ $selected -lt 0 ]] && selected=$((opt_count - 1))
+                    ;;
+                '[B')  # Down
+                    ((selected++))
+                    [[ $selected -ge $opt_count ]] && selected=0
+                    ;;
+            esac
+            # Move cursor up to re-render options
+            local total_lines=$((opt_count + 4))
+            for ((j=0; j<total_lines; j++)); do
+                echo -ne "\e[1A\e[2K"
+            done
+        elif [[ "$key" == "" ]] || [[ "$key" == $'\n' ]] || [[ "$key" == $'\r' ]]; then
+            # Enter — confirm selection
+            SELECT_MENU_RESULT=$selected
+            # Show cursor again
+            echo -ne "\e[?25h"
+            echo ""
+            return 0
+        fi
+        # Ignore other keys
+    done
+}
+
+# ═══════════════════════════════════════════════
 # Multi-use helper functions
 # ═══════════════════════════════════════════════
 
@@ -316,19 +380,14 @@ main() {
                 if [[ "$firmware" == "bios" ]]; then
                     bootloader="grub"
                 else
-                    while true; do
-                        echo "" >&2
-                        echo "  Select bootloader:" >&2
-                        echo "    1) systemd-boot — minimal, fast, UEFI only (recommended)" >&2
-                        echo "    2) GRUB         — feature-rich, snapshots, themes, LUKS support" >&2
-                        echo "" >&2
-                        read -rp "$(echo -e "${CYAN}  Enter 1 or 2 (default 1): ${RESET}") " choice
-                        case "${choice:-1}" in
-                            1) bootloader="systemd-boot"; break ;;
-                            2) bootloader="grub"; break ;;
-                            *) warning "Invalid choice, enter 1 or 2." ;;
-                        esac
-                    done
+                    select_menu "Select bootloader:" \
+                        "systemd-boot — minimal, fast, UEFI only (recommended)" \
+                        "GRUB         — feature-rich, snapshots, themes, LUKS support"
+                    choice=$SELECT_MENU_RESULT
+                    case $choice in
+                        0) bootloader="systemd-boot" ;;
+                        1) bootloader="grub" ;;
+                    esac
                 fi
                 success "Firmware  : ${firmware^^}"
                 success "Bootloader: ${bootloader}"
@@ -345,20 +404,15 @@ main() {
                 show_progress 2
                 section "Step 2: Installation Mode"
 
-                # Choose mode (inline)
-                while true; do
-                    echo "" >&2
-                    echo "  Select installation mode:" >&2
-                    echo "    1) Clean install   — wipe everything, fresh system" >&2
-                    echo "    2) Reinstall       — keep /home, only recreate boot+swap+root" >&2
-                    echo "" >&2
-                    read -rp "$(echo -e "${CYAN}  Enter 1 or 2 (default 1): ${RESET}") " choice
-                    case "${choice:-1}" in
-                        1) mode="clean"; break ;;
-                        2) mode="reinstall"; break ;;
-                        *) warning "Invalid choice, enter 1 or 2." ;;
-                    esac
-                done
+                # Choose mode (↑/↓ selection)
+                select_menu "Select installation mode:" \
+                    "Clean install   — wipe everything, fresh system" \
+                    "Reinstall       — keep /home, only recreate boot+swap+root"
+                choice=$SELECT_MENU_RESULT
+                case $choice in
+                    0) mode="clean" ;;
+                    1) mode="reinstall" ;;
+                esac
                 success "Mode: ${mode} install"
 
                 if [[ "$mode" == "reinstall" ]]; then
@@ -466,12 +520,16 @@ main() {
                     disk_gib=$(echo "scale=2; $disk_bytes / 1073741824" | bc -l)
 
                     echo ""
-                    echo "  Partition sizing:"
-                    echo "    1) Auto 2:7 ratio    — root:home = 2:7 (default)"
-                    echo "    2) Semi-manual       — specify root size, home gets the rest"
-                    echo "    3) Fully manual      — specify boot, root, home, swap sizes"
-                    echo ""
-                    read -rp "$(echo -e "${CYAN}  Enter 1/2/3 (default 1): ${RESET}") " split_choice
+                    select_menu "Partition sizing:" \
+                        "Auto 2:7 ratio    — root:home = 2:7 (default)" \
+                        "Semi-manual       — specify root size, home gets the rest" \
+                        "Fully manual      — specify boot, root, home, swap sizes"
+                    choice=$SELECT_MENU_RESULT
+                    case $choice in
+                        0) split_choice="1" ;;
+                        1) split_choice="2" ;;
+                        2) split_choice="3" ;;
+                    esac
 
                     if [[ "${split_choice:-1}" != "3" ]]; then
                         echo ""
@@ -635,11 +693,14 @@ main() {
                     fi
 
                     echo ""
-                    echo "  Root size (home is preserved):"
-                    echo "    1) Use all available: ${max_root}G (default)"
-                    echo "    2) Manual"
-                    echo ""
-                    read -rp "$(echo -e "${CYAN}  Enter 1 or 2 (default 1): ${RESET}") " root_choice
+                    select_menu "Root size (home is preserved):" \
+                        "Use all available: ${max_root}G (default)" \
+                        "Manual"
+                    choice=$SELECT_MENU_RESULT
+                    case $choice in
+                        0) root_choice="1" ;;
+                        1) root_choice="2" ;;
+                    esac
 
                     case "${root_choice:-1}" in
                         2)
