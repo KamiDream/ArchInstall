@@ -390,7 +390,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 0
                 echo -e "${RED}${BOLD}  ⚠️  WARNING: DESTRUCTIVE OPERATIONS AHEAD${RESET}"
                 echo ""
                 echo "  This script will perform IRREVERSIBLE operations on your disk, including:"
@@ -436,7 +435,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 1
 
                 # Collect disk options
                 local -a disk_options=()
@@ -487,7 +485,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
 
                 # Choose mode (↑/↓ selection)
                 select_menu "Select installation mode:" \
@@ -545,7 +542,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
                 warning "Target disk: $disk"
                 if [[ "$mode" == "clean" ]]; then
                     warning "ALL DATA on this disk will be DESTROYED!"
@@ -566,7 +562,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
 
                 local label
                 label=$(blkid -s PTTYPE -o value "$disk" 2>/dev/null || true)
@@ -588,7 +583,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
 
                 boot_size="3G"
                 BOOT_PART=""; SWAP_PART=""; ROOT_PART=""; HOME_PART=""
@@ -919,7 +913,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
 
                 # ── Format all partitions in parallel ──
                 echo "  Formatting all partitions in parallel ..."
@@ -1020,7 +1013,6 @@ main() {
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 3
 
                 echo "  Installing base system (pacstrap)..."
                 echo "  Packages: base base-devel linux-zen linux-lts linux-firmware"
@@ -1136,7 +1128,6 @@ FSTAB
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
                 local hostname="archlinux"
                 read -rp "$(echo -e "${CYAN}  Enter hostname (default archlinux): ${RESET}") " hostname_input
                 [[ -n "$hostname_input" ]] && hostname="$hostname_input"
@@ -1156,7 +1147,6 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
                 info "Installing bootloader (${bootloader}) ..."
 
                 root_partuuid=$(blkid -s PARTUUID -o value "$ROOT_PART" 2>/dev/null)
@@ -1198,7 +1188,6 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
 
                 echo "  Enabling NetworkManager ..."
                 arch-chroot "$mnt" systemctl enable NetworkManager
@@ -1243,7 +1232,6 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 2
                 select_menu "Set root password now?" "Yes" "No (skip)"
                 if (( SELECT_MENU_RESULT == 1 )); then
                     success "Skipped."; COMPLETED[7]=1; continue
@@ -1271,7 +1259,6 @@ EOF
             # ─────────────────────────────────────
                 clear
                 print_logo
-                show_progress 3
                 select_menu "Create a new user?" "Yes" "No (skip)"
                 if (( SELECT_MENU_RESULT == 1 )); then
                     success "Skipped user creation."
