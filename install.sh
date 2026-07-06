@@ -364,18 +364,12 @@ main() {
     local pkg_base pkg_extra pkg_boot
     local root_partuuid disk_dev
     local MIN_ROOT=10
-    local auto_step=-1
     STEP_SELECTED=0
     COMPLETED=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
 
     while true; do
-        if (( auto_step >= 0 )); then
-            step=$auto_step
-            auto_step=-1
-        else
-            interactive_progress
-            step=$STEP_SELECTED
-        fi
+        interactive_progress
+        step=$STEP_SELECTED
         case $step in
             # ─────────────────────────────────────
             0) # Risk Disclaimer + Prerequisites
@@ -423,7 +417,6 @@ main() {
                 done
 
                 COMPLETED[$step]=1
-                auto_step=1
                 ;;
 
             # ─────────────────────────────────────
@@ -498,11 +491,6 @@ main() {
                 success "Mode: ${mode} install"
 
                 COMPLETED[$step]=1
-                if [[ "$mode" == "reinstall" ]]; then
-                    auto_step=3
-                else
-                    auto_step=4
-                fi
                 ;;
 
             # ─────────────────────────────────────
