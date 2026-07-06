@@ -119,6 +119,8 @@ interactive_progress() {
     echo -ne "\e[?25l"
 
     while true; do
+        clear
+        print_logo
         echo ""
         for i in "${!STEPS[@]}"; do
             local mark=" "
@@ -133,7 +135,7 @@ interactive_progress() {
             fi
         done
         echo ""
-        echo -e "  ${YELLOW}↑/↓ 导航 • Enter 执行 • q 退出${RESET}"
+        echo -e "  ${YELLOW}↑/↓ Navigate • Enter Execute • q Quit${RESET}"
 
         read -rsn1 key
         if [[ "$key" == $'\e' ]]; then
@@ -148,19 +150,17 @@ interactive_progress() {
                     [[ $selected -ge ${#STEPS[@]} ]] && selected=0
                     ;;
             esac
-            local total_lines=$((${#STEPS[@]} + 4))
-            for ((j=0; j<total_lines; j++)); do
-                echo -ne "\e[1A\e[2K"
-            done
         elif [[ "$key" == "q" || "$key" == "Q" ]]; then
             echo -ne "\e[?25h"
+            clear
+            print_logo
             echo ""
             echo -e "${GREEN}  ✓ Exited by user.${RESET}"
+            echo ""
             exit 0
         elif [[ "$key" == "" || "$key" == $'\n' || "$key" == $'\r' ]]; then
             STEP_SELECTED=$selected
             echo -ne "\e[?25h"
-            echo ""
             return 0
         fi
     done
@@ -213,7 +213,7 @@ select_menu() {
             fi
         done
         echo ""
-        echo -e "  ${YELLOW}↑/↓ 导航 • Enter 确认${RESET}"
+        echo -e "  ${YELLOW}↑/↓ Navigate • Enter Confirm${RESET}"
 
         # Read single keypress
         read -rsn1 key
