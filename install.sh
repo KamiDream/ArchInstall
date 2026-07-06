@@ -135,7 +135,8 @@ select_menu() {
 
     while true; do
         # Print prompt and options
-        echo -e "\n  ${prompt}"
+        echo ""
+        echo -e "  ${prompt}"
         echo ""
         for i in "${!options[@]}"; do
             if [[ $i -eq $selected ]]; then
@@ -163,7 +164,7 @@ select_menu() {
                     ;;
             esac
             # Move cursor up to re-render options
-            local total_lines=$((opt_count + 4))
+            local total_lines=$((opt_count + 5))
             for ((j=0; j<total_lines; j++)); do
                 echo -ne "\e[1A\e[2K"
             done
